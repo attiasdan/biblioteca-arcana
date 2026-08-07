@@ -1,0 +1,19 @@
+{
+  "name": "buscador-global-de-livros",
+  "version": "1.0.0",
+  "description": "Buscador global de livros em catalogos gratuitos e publicos.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "license": "MIT"
+}

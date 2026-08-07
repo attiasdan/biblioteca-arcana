@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Busque livros em qualquer idioma em acervos gratuitos, públicos e abertos ao redor do mundo."
+    >
+    <title>Biblioteca Arcana | Buscador Global de Livros</title>
+    <link rel="stylesheet" href="/styles.css?v=20260807-7">
+  </head>
+  <body>
+    <div class="sky-layer" id="skyLayer" aria-hidden="true"></div>
+    <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+
+    <header class="hero">
+      <div class="hero-aura" aria-hidden="true"></div>
+      <div class="topbar">
+        <a class="brand" href="#top" aria-label="Biblioteca Arcana, início">
+          <span class="brand-sigil" aria-hidden="true">B</span>
+          <span>
+            <strong>Biblioteca Arcana</strong>
+            <small>Acervos livres do mundo todo</small>
+          </span>
+        </a>
+        <div class="topbar-actions">
+          <div class="status-pill" id="sourceCount">Fontes carregando</div>
+          <button
+            class="top-action"
+            id="shelfOpen"
+            type="button"
+            title="Minha estante"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 20.5v-15A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v15" />
+              <path d="M4 13.5h16" />
+              <path d="M8 8.5v5" />
+              <path d="M12.5 8.5v5" />
+              <path d="M17 8.5v5" />
+            </svg>
+            <span class="sr-only">Minha estante</span>
+            <span class="top-action-count" id="shelfCount">0</span>
+          </button>
+          <button
+            class="fx-toggle"
+            id="fxToggle"
+            type="button"
+            aria-pressed="true"
+            title="Pausar efeitos mágicos"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 4v16" />
+              <path d="M8 4h7" />
+              <path d="M8 12h5" />
+              <path d="M17 7l5 5" />
+              <path d="M22 7l-5 5" />
+            </svg>
+            <span class="sr-only">Pausar efeitos mágicos</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="hero-content" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">O grande salão dos livros livres</p>
+          <h1>Encontre sua próxima leitura entre acervos do mundo todo.</h1>
+          <p class="hero-description">
+            Pesquise por título, autor ou ISBN. A coruja bibliotecária percorre os catálogos,
+            encontra PDFs públicos e destaca a melhor pista para você.
+          </p>
+        </div>
+        <div class="owl-callout" aria-hidden="true">
+          <span class="owl-callout-line"></span>
+          <span>Sabedoria entre estantes</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="search-panel reveal" aria-label="Busca de livros">
+        <form id="searchForm" class="search-form">
+          <label class="search-label" for="query">Qual livro devemos procurar?</label>
+          <div class="search-row">
+            <div class="search-field">
+              <span class="search-glyph" aria-hidden="true">&#8981;</span>
+              <input
+                id="query"
+                name="q"
+                type="search"
+                autocomplete="off"
+                placeholder="Ex.: Dom Casmurro, Pride and Prejudice, Cien años de soledad"
+                required
+              >
+            </div>
+            <button class="search-button" id="searchBtn" type="submit">
+              <span>Buscar nos acervos</span>
+              <span class="button-spark" aria-hidden="true">&#10022;</span>
+            </button>
+          </div>
+          <div class="search-footer">
+            <div class="filters" role="group" aria-label="Filtros">
+              <label for="language">Idioma
+                <select id="language" name="lang">
+                  <option value="any">Todos os idiomas</option>
+                  <option value="pt">Português</option>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="fr">Français</option>
+                  <option value="de">Deutsch</option>
+                  <option value="it">Italiano</option>
+                </select>
+              </label>
+              <label>
+                <input id="pdfOnly" type="checkbox">
+                <span>Somente PDF disponível</span>
+              </label>
+            </div>
+            <span class="search-note" id="searchNote">Buscando em todos os idiomas</span>
+          </div>
+          <div class="filter-bar" role="group" aria-label="Filtros avançados">
+            <label class="filter-field" for="sortOrder">Ordenar
+              <select id="sortOrder">
+                <option value="relevance">Relevância</option>
+                <option value="year_desc">Ano (mais recente)</option>
+                <option value="year_asc">Ano (mais antigo)</option>
+                <option value="source">Fonte</option>
+                <option value="title">Título</option>
+              </select>
+            </label>
+            <label class="filter-field" for="yearMin">De
+              <input id="yearMin" type="number" min="1400" max="2100" placeholder="Ano mín." aria-label="Ano mínimo">
+            </label>
+            <label class="filter-field" for="yearMax">Até
+              <input id="yearMax" type="number" min="1400" max="2100" placeholder="Ano máx." aria-label="Ano máximo">
+            </label>
+            <span class="filter-divider" aria-hidden="true"></span>
+            <label class="check"><input type="checkbox" class="format-filter" value="PDF"> PDF</label>
+            <label class="check"><input type="checkbox" class="format-filter" value="EPUB"> ePub</label>
+            <label class="check"><input type="checkbox" class="format-filter" value="Audio"> Áudio</label>
+            <label class="check"><input type="checkbox" class="format-filter" value="texto"> Texto</label>
+            <label class="filter-field" for="category">Coleção
+              <select id="category">
+                <option value="all">Todas</option>
+                <option value="livro">Livros</option>
+                <option value="artigo">Artigos</option>
+                <option value="audiolivro">Audiolivros</option>
+                <option value="texto">Textos</option>
+              </select>
+            </label>
+          </div>
+          <div class="search-actions">
+            <button id="randomBtn" type="button" class="action-btn" title="Sorteia um clássico para pesquisar">
+              <span class="sigil" aria-hidden="true">&#10022;</span> Sorteio da coruja
+            </button>
+            <button id="shareBtn" type="button" class="action-btn" title="Copiar link desta busca">
+              Copiar link
+            </button>
+            <button id="exportBtn" type="button" class="action-btn" title="Exportar resultados como CSV">
+              Exportar CSV
+            </button>
+            <div class="history-chips" id="historyChips" aria-label="Buscas recentes"></div>
+          </div>
+          <div id="progressWrap" class="progress-wrap" hidden>
+            <div class="progress-info">
+              <span id="progressText">Preparando busca</span>
+              <span id="progressEta">estimando...</span>
+            </div>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="Progresso da busca"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <div class="toasts" id="toasts" aria-live="polite"></div>
+
+      <div class="shelf-overlay" id="shelfOverlay" hidden></div>
+      <aside class="shelf-panel" id="shelfPanel" aria-label="Minha estante" hidden>
+        <div class="shelf-head">
+          <h2>Minha estante</h2>
+          <button id="shelfClose" type="button" aria-label="Fechar estante">&#215;</button>
+        </div>
+        <p class="shelf-hint">Livros guardados ficam aqui e permanecem salvos neste navegador.</p>
+        <div class="shelf-list" id="shelfList"></div>
+      </aside>
+
+      <aside class="owl-guide reveal" id="owlGuide" aria-live="polite">
+        <div class="owl-orb">
+          <span class="owl-portrait" role="img" aria-label="Coruja bibliotecária"></span>
+          <span class="rune-ring" aria-hidden="true"></span>
+        </div>
+        <div class="owl-advice">
+          <p class="guide-label"><span aria-hidden="true">&#10022;</span> Conselho da bibliotecária</p>
+          <h2 id="owlTitle">As estantes estão à sua espera.</h2>
+          <p id="owlMessage">
+            Diga o nome de uma obra, de um autor ou de um ISBN. Eu indicarei a melhor opção com
+            PDF disponível.
+          </p>
+        </div>
+        <button class="owl-action" id="owlAction" type="button" hidden>
+          Ver melhor opção
+        </button>
+      </aside>
+
+      <section class="summary reveal" aria-live="polite" aria-label="Resumo da busca">
+        <div>
+          <span class="metric" id="resultCount">0</span>
+          <span class="metric-label">resultados</span>
+        </div>
+        <div>
+          <span class="metric" id="pdfCount">0</span>
+          <span class="metric-label">PDFs encontrados</span>
+        </div>
+        <div>
+          <span class="metric" id="sourceOkCount">0</span>
+          <span class="metric-label">fontes ativas</span>
+        </div>
+      </section>
+
+      <section id="message" class="message reveal">
+        Digite uma busca para consultar acervos gratuitos e públicos do mundo todo.
+      </section>
+
+      <section id="results" class="results reveal" aria-label="Resultados"></section>
+
+      <section class="catalog-panel reveal" aria-label="Catálogos">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Mapa dos acervos</p>
+            <h2>Catálogos pesquisados</h2>
+          </div>
+          <span id="catalogStatus">carregando</span>
+        </div>
+        <div id="catalogList" class="catalog-list"></div>
+      </section>
+
+      <section class="stats-panel reveal" aria-label="Estatísticas">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Números do salão</p>
+            <h2>Estatísticas</h2>
+          </div>
+          <span id="statsStatus">estimando</span>
+        </div>
+        <div class="stats-grid" id="statsGrid"></div>
+        <p class="stats-fact" id="statsFact" aria-live="polite"></p>
+        <p class="stats-last" id="statsLast"></p>
+      </section>
+    </main>
+
+    <footer class="footer reveal">
+      <span class="footer-mark" aria-hidden="true">&#10022;</span>
+      <p>Livros gratuitos, públicos e abertos, reunidos em uma única busca.</p>
+    </footer>
+
+    <template id="skeletonTemplate">
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton-cover"></div>
+        <div class="skeleton-body">
+          <span class="skeleton-line w35"></span>
+          <span class="skeleton-line w85"></span>
+          <span class="skeleton-line w60"></span>
+          <span class="skeleton-line w70"></span>
+        </div>
+      </div>
+    </template>
+
+    <template id="resultTemplate">
+      <article class="result-card">
+        <div class="cover-wrap">
+          <img class="cover" alt="">
+          <div class="cover-fallback"><span>Livro</span></div>
+        </div>
+        <div class="result-main">
+          <div class="result-meta">
+            <span class="best-badge" hidden>Escolha da coruja</span>
+            <span class="site"></span>
+            <span class="availability"></span>
+            <span class="language"></span>
+            <button class="favorite-btn" type="button" aria-label="Guardar na estante" title="Guardar na estante">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4" width="17" height="16" rx="2" />
+                <path d="M12 4v16" />
+                <path d="M9 12h6" />
+              </svg>
+            </button>
+          </div>
+          <h2 class="title"></h2>
+          <p class="authors"></p>
+          <div class="format-row"></div>
+          <p class="pdf-origin" hidden></p>
+          <div class="detail-controls" aria-label="Informações sobre o livro">
+            <button class="detail-toggle summary-toggle" type="button" aria-expanded="false">
+              <span class="detail-icon" aria-hidden="true">&#9776;</span>
+              <span class="detail-toggle-label">Ver resumo</span>
+            </button>
+            <button class="detail-toggle review-toggle" type="button" aria-expanded="false">
+              <span class="detail-icon" aria-hidden="true">&#10022;</span>
+              <span class="detail-toggle-label">Ver resenha</span>
+            </button>
+          </div>
+          <div class="detail-panel summary-panel" hidden>
+            <p class="detail-heading">Resumo da obra</p>
+            <p class="detail-copy summary-copy"></p>
+          </div>
+          <div class="detail-panel review-panel" hidden>
+            <p class="detail-heading">Resenha da edição</p>
+            <p class="detail-copy review-copy"></p>
+          </div>
+          <div class="actions">
+            <a class="source-link" target="_blank" rel="noreferrer">Fonte original</a>
+            <a class="pdf-link" target="_blank" rel="noreferrer">Baixar PDF</a>
+            <a class="epub-link" target="_blank" rel="noreferrer">Baixar ePub</a>
+            <a class="reader-link" target="_blank" rel="noreferrer">Ler / imprimir PDF</a>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js?v=20260807-7" defer></script>
+  </body>
+</html>
