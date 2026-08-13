@@ -382,9 +382,30 @@ function renderResult(item) {
 
 function setLink(card, selector, href, label) {
   const link = card.querySelector(selector);
-  link.textContent = label;
+  link.textContent = "";
+  link.append(linkIcon(selector));
+  link.append(` ${label}`);
   if (!href) { link.hidden = true; return; }
   link.href = href;
+}
+
+function linkIcon(selector) {
+  const inner = {
+    ".source-link":
+      '<path d="M14 5h5v5"/><path d="M19 5 11 13"/><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+    ".pdf-link":
+      '<path d="M12 3.5V12"/><path d="m8.5 9 3.5 3.5L15.5 9"/><path d="M5.5 14.5V17a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-2.5"/>',
+    ".epub-link":
+      '<path d="M12 6.2c-1.8-1.5-4.1-2-6.4-2-.6 0-1.1 0-1.6.2v13.4c.5-.1 1.1-.2 1.6-.2 2.3 0 4.6.5 6.4 2 1.8-1.5 4.1-2 6.4-2 .5 0 1.1.1 1.6.2V4.4c-.5-.2-1.1-.2-1.6-.2-2.3 0-4.6.5-6.4 2Z"/><path d="M12 6.2v13.4"/>',
+    ".reader-link":
+      '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>'
+  }[selector] || "";
+  const span = document.createElement("span");
+  span.className = "link-icon";
+  span.setAttribute("aria-hidden", "true");
+  span.innerHTML =
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  return span;
 }
 
 function bindDetails(card) {
@@ -446,15 +467,30 @@ function renderStatistics(stats) {
     { value: stats.maxResults, label: "resultados máximos por busca" },
     { value: stats.cacheCapacity, label: `buscas em cache (${stats.cacheTtlMinutes} min)` }
   ];
+  const icons = [
+    '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    CATALOG_ICONS.book,
+    CATALOG_ICONS.bolt,
+    '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.5 2.2 3.8 5.2 3.8 8.5s-1.3 6.3-3.8 8.5c-2.5-2.2-3.8-5.2-3.8-8.5s1.3-6.3 3.8-8.5Z"/>',
+    '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 7.9-7.5 9.5-4.3-1.6-7.5-5-7.5-9.5V6Z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
+    '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5Z"/>',
+    '<path d="M8.5 6h12"/><path d="M8.5 12h12"/><path d="M8.5 18h12"/><circle cx="4.5" cy="6" r="0.9"/><circle cx="4.5" cy="12" r="0.9"/><circle cx="4.5" cy="18" r="0.9"/>',
+    '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>'
+  ];
   statsGrid.replaceChildren(
-    ...cards.map(({ value, label }) => {
+    ...cards.map(({ value, label }, index) => {
       const card = document.createElement("div");
       card.className = "stats-card";
+      const iconEl = document.createElement("span");
+      iconEl.className = "stats-card-icon";
+      iconEl.setAttribute("aria-hidden", "true");
+      iconEl.innerHTML =
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${icons[index]}</svg>`;
       const valueEl = document.createElement("b");
       valueEl.textContent = value;
       const labelEl = document.createElement("span");
       labelEl.textContent = label;
-      card.append(valueEl, labelEl);
+      card.append(iconEl, valueEl, labelEl);
       return card;
     })
   );
@@ -491,13 +527,45 @@ async function loadStatistics() {
   }
 }
 
+const CATALOG_ICONS = {
+  academic:
+    '<path d="M12 3.5 22 8l-10 4.5L2 8Z"/><path d="M6 10.5v4.5c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4.5"/><path d="M22 8v4.5"/>',
+  audio:
+    '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M3.5 14h4v5h-4Z"/><path d="M16.5 14h4v5h-4Z"/>',
+  search: '<circle cx="11" cy="11" r="6.3"/><path d="m15.8 15.8 4.4 4.4"/>',
+  pdf:
+    '<path d="M7 3.5h7l4.5 4.5V20a.9.9 0 0 1-.9.9H7a.9.9 0 0 1-.9-.9V4.4A.9.9 0 0 1 7 3.5Z"/><path d="M14 3.5V8.5h4.5"/><path d="M12 11.5V16"/><path d="m10 14.5 2 2 2-2"/>',
+  library:
+    '<path d="M4 20.5V9.5L12 4l8 5.5v11"/><path d="M8 20.5v-6h8v6"/><path d="M3 20.5h18"/>',
+  book:
+    '<path d="M12 6.2c-1.8-1.5-4.1-2-6.4-2-.6 0-1.1 0-1.6.2v13.4c.5-.1 1.1-.2 1.6-.2 2.3 0 4.6.5 6.4 2 1.8-1.5 4.1-2 6.4-2 .5 0 1.1.1 1.6.2V4.4c-.5-.2-1.1-.2-1.6-.2-2.3 0-4.6.5-6.4 2Z"/><path d="M12 6.2v13.4"/>',
+  bolt: '<path d="M13 2.5 5 13h6l-1 8.5L17 11h-6Z"/>'
+};
+
+function catalogIcon(status) {
+  const key = `${status.id || ""} ${status.name || ""}`.toLowerCase();
+  let kind = "book";
+  if (/scholar|acadêmico|openalex|crossref|arxiv/.test(key)) kind = "academic";
+  else if (/librivox/.test(key)) kind = "audio";
+  else if (/google-pdf|bing-pdf|duckduckgo-pdf|filetype:pdf/.test(key)) kind = "search";
+  else if (/pdf-discovery|complementar/.test(key)) kind = "pdf";
+  else if (/biblioteca|portal|nacional|senado|fiocruz|luso|camões|camoes|brasiliana|ufsc|scielo|wikisource|wikilivros|domínio|dominio|acervo/.test(key)) kind = "library";
+  const span = document.createElement("span");
+  span.className = "catalog-chip-icon";
+  span.setAttribute("aria-hidden", "true");
+  span.innerHTML =
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${CATALOG_ICONS[kind]}</svg>`;
+  return span;
+}
+
 function renderCatalog(statuses, catalogChecks) {
   const catalog = document.querySelector("#catalogList");
   catalog.replaceChildren();
   for (const status of statuses) {
     const row = document.createElement("span");
     row.className = "catalog-chip";
-    row.textContent = `${status.name}: ${status.ok ? `${status.count} resultados` : "indisponível"}`;
+    row.append(catalogIcon(status));
+    row.append(` ${status.name}: ${status.ok ? `${status.count} resultados` : "indisponível"}`);
     catalog.append(row);
   }
   for (const check of catalogChecks.filter((item) => item.id === "google-scholar")) {
@@ -506,7 +574,8 @@ function renderCatalog(statuses, catalogChecks) {
     link.href = check.sourceUrl;
     link.target = "_blank";
     link.rel = "noreferrer";
-    link.textContent = "Pesquisar no Google Acadêmico";
+    link.append(catalogIcon({ id: check.id, name: check.site }));
+    link.append(" Pesquisar no Google Acadêmico");
     catalog.append(link);
   }
   document.querySelector("#catalogStatus").textContent = `${statuses.filter((s) => s.ok).length} fontes ativas`;

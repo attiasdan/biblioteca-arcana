@@ -18,7 +18,15 @@
       <div class="hero-aura" aria-hidden="true"></div>
       <div class="topbar">
         <a class="brand" href="#top" aria-label="Biblioteca Arcana, início">
-          <span class="brand-sigil" aria-hidden="true">B</span>
+          <span class="brand-sigil" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 6.2c-1.8-1.5-4.1-2-6.4-2-.6 0-1.1 0-1.6.2v13.4c.5-.1 1.1-.2 1.6-.2 2.3 0 4.6.5 6.4 2 1.8-1.5 4.1-2 6.4-2 .5 0 1.1.1 1.6.2V4.4c-.5-.2-1.1-.2-1.6-.2-2.3 0-4.6.5-6.4 2Z" />
+              <path d="M12 6.2v13.4" />
+              <path d="M8.7 9c-.8-.6-1.8-.9-2.9-.9-.4 0-.8 0-1.1.1" />
+              <path d="M15.3 9c.8-.6 1.8-.9 2.9-.9.4 0 .8 0 1.1.1" />
+              <path d="M18.5 3.6l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5Z" />
+            </svg>
+          </span>
           <span>
             <strong>Biblioteca Arcana</strong>
             <small>Acervos livres do mundo todo</small>
@@ -32,12 +40,16 @@
             type="button"
             title="Minha estante"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M4 20.5v-15A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v15" />
-              <path d="M4 13.5h16" />
-              <path d="M8 8.5v5" />
-              <path d="M12.5 8.5v5" />
-              <path d="M17 8.5v5" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4.5 20.5v-13c0-.83.67-1.5 1.5-1.5h12c.83 0 1.5.67 1.5 1.5v13" />
+              <path d="M4.5 13.2h15" />
+              <path d="M4.5 4.2h15" />
+              <path d="M7.2 9.9h2.9" />
+              <path d="M11.6 9.9h2.9" />
+              <path d="M15.9 9.9h2.1" />
+              <path d="M7.2 16.4h2.9" />
+              <path d="M11.6 16.4h2.9" />
+              <path d="M15.9 16.4h2.1" />
             </svg>
             <span class="sr-only">Minha estante</span>
             <span class="top-action-count" id="shelfCount">0</span>
@@ -49,12 +61,11 @@
             aria-pressed="true"
             title="Pausar efeitos mágicos"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M8 4v16" />
-              <path d="M8 4h7" />
-              <path d="M8 12h5" />
-              <path d="M17 7l5 5" />
-              <path d="M22 7l-5 5" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m6.5 17.5 11-11" />
+              <path d="m14.5 4.5 5 5" />
+              <path d="M9.5 9.5l1.6 1.6" />
+              <path d="M15 3l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7Z" />
             </svg>
             <span class="sr-only">Pausar efeitos mágicos</span>
           </button>
@@ -83,7 +94,13 @@
           <label class="search-label" for="query">Qual livro devemos procurar?</label>
           <div class="search-row">
             <div class="search-field">
-              <span class="search-glyph" aria-hidden="true">&#8981;</span>
+              <span class="search-glyph" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="10.8" cy="10.8" r="6.3" />
+                  <path d="m15.8 15.8 4.4 4.4" />
+                  <path d="M10.8 7.4l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1Z" />
+                </svg>
+              </span>
               <input
                 id="query"
                 name="q"
@@ -95,7 +112,11 @@
             </div>
             <button class="search-button" id="searchBtn" type="submit">
               <span>Buscar nos acervos</span>
-              <span class="button-spark" aria-hidden="true">&#10022;</span>
+              <span class="button-spark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <path d="M12 2.6c.55 4.6 2.3 6.35 6.9 6.9-4.6.55-6.35 2.3-6.9 6.9-.55-4.6-2.3-6.35-6.9-6.9 4.6-.55 6.35-2.3 6.9-6.9z" />
+                </svg>
+              </span>
             </button>
           </div>
           <div class="search-footer">
@@ -151,12 +172,31 @@
           </div>
           <div class="search-actions">
             <button id="randomBtn" type="button" class="action-btn" title="Sorteia um clássico para pesquisar">
-              <span class="sigil" aria-hidden="true">&#10022;</span> Sorteio da coruja
+              <span class="sigil" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
+                  <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
+                </svg>
+              </span> Sorteio da coruja
             </button>
             <button id="shareBtn" type="button" class="action-btn" title="Copiar link desta busca">
+              <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10 13.5a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7-7l-1.1 1.1" />
+                <path d="M14 10.5a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7 7l1.1-1.1" />
+              </svg>
               Copiar link
             </button>
             <button id="exportBtn" type="button" class="action-btn" title="Exportar resultados como CSV">
+              <svg class="action-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8.5Z" />
+                <path d="M14 3.5V8.5h5" />
+                <path d="M12 12v4.5" />
+                <path d="m10 14.5 2 2 2-2" />
+              </svg>
               Exportar CSV
             </button>
             <div class="history-chips" id="historyChips" aria-label="Buscas recentes"></div>
@@ -198,7 +238,13 @@
           <span class="rune-ring" aria-hidden="true"></span>
         </div>
         <div class="owl-advice">
-          <p class="guide-label"><span aria-hidden="true">&#10022;</span> Conselho da bibliotecária</p>
+          <p class="guide-label"><span aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.5 4C9.6 4 4.8 10.6 4.2 20l1.7-1.5" />
+              <path d="M20.5 4c-4.2 1.9-8.4 6.4-9.8 11.6" />
+              <path d="M6.6 18.6c1.7-.5 2.7-1.2 3.2-2.4" />
+            </svg>
+          </span> Conselho da bibliotecária</p>
           <h2 id="owlTitle">As estantes estão à sua espera.</h2>
           <p id="owlMessage">
             Diga o nome de uma obra, de um autor ou de um ISBN. Eu indicarei a melhor opção com
@@ -257,7 +303,11 @@
     </main>
 
     <footer class="footer reveal">
-      <span class="footer-mark" aria-hidden="true">&#10022;</span>
+      <span class="footer-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M12 2.6c.55 4.6 2.3 6.35 6.9 6.9-4.6.55-6.35 2.3-6.9 6.9-.55-4.6-2.3-6.35-6.9-6.9 4.6-.55 6.35-2.3 6.9-6.9z" />
+        </svg>
+      </span>
       <p>Livros gratuitos, públicos e abertos, reunidos em uma única busca.</p>
     </footer>
 
@@ -286,10 +336,8 @@
             <span class="availability"></span>
             <span class="language"></span>
             <button class="favorite-btn" type="button" aria-label="Guardar na estante" title="Guardar na estante">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3.5" y="4" width="17" height="16" rx="2" />
-                <path d="M12 4v16" />
-                <path d="M9 12h6" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3.7l2.5 5.1 5.6.8-4 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4-4 5.6-.8Z" />
               </svg>
             </button>
           </div>
@@ -299,11 +347,24 @@
           <p class="pdf-origin" hidden></p>
           <div class="detail-controls" aria-label="Informações sobre o livro">
             <button class="detail-toggle summary-toggle" type="button" aria-expanded="false">
-              <span class="detail-icon" aria-hidden="true">&#9776;</span>
+              <span class="detail-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 3.5h7l4.5 4.5V20a.9.9 0 0 1-.9.9H7a.9.9 0 0 1-.9-.9V4.4A.9.9 0 0 1 7 3.5Z" />
+                  <path d="M14 3.5V8.5h4.5" />
+                  <path d="M9 12.5h6" />
+                  <path d="M9 16h6" />
+                </svg>
+              </span>
               <span class="detail-toggle-label">Ver resumo</span>
             </button>
             <button class="detail-toggle review-toggle" type="button" aria-expanded="false">
-              <span class="detail-icon" aria-hidden="true">&#10022;</span>
+              <span class="detail-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20.5 4C9.6 4 4.8 10.6 4.2 20l1.7-1.5" />
+                  <path d="M20.5 4c-4.2 1.9-8.4 6.4-9.8 11.6" />
+                  <path d="M6.6 18.6c1.7-.5 2.7-1.2 3.2-2.4" />
+                </svg>
+              </span>
               <span class="detail-toggle-label">Ver resenha</span>
             </button>
           </div>
