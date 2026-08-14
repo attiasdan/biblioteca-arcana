@@ -1391,10 +1391,6 @@ a.catalog-chip:hover {
 }
 
 .action-btn-icon {
-  display: flex;
-}
-
-.action-btn-icon svg {
   width: 14px;
   height: 14px;
 }
