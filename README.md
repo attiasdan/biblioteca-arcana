@@ -9,10 +9,11 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 - **Busca simultânea e paralela** em catálogos com API pública: Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, **arXiv**, **DOAB** e **OAPEN**.
 - **Todos os catálogos HTML ativos** (Planet eBook, PDFBooksWorld, FreeComputerBooks, GetFreeEBooks, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, FreeTechBooks, Bookyards, eBookLobby) com limite de concorrência (6) para não sobrecarregar as fontes.
 - **Busca precisa por ISBN** (ISBN-10/13): resolve o registro direto no Open Library e no Google Books, sem depender de correspondência textual.
-- **Descoberta complementar de PDFs** em 6 buscas `filetype:pdf` simultâneas (Google, Bing e DuckDuckGo, com consultas exatas e de repositórios abertos), com filtro de domínios confiáveis (`archive.org`, `gutenberg.org`, `gov.br`, `edu.br`, `scielo.org`, `arxiv.org`, `oapen.org`, `doabooks.org`, entre outros).
+- **Descoberta complementar de PDFs** em 11 buscas simultâneas na web (Google, Bing, DuckDuckGo, Yahoo e Mojeek), combinando título exato, repositórios acadêmicos, bibliotecas digitais e variações do nome do arquivo, com filtro de domínios confiáveis (`archive.org`, `zenodo.org`, `core.ac.uk`, `gov.br`, `edu.br`, `scielo.org`, `arxiv.org`, `oapen.org`, `doabooks.org`, entre outros).
 - **Consolidação fuzzy de duplicatas**: o mesmo livro vindo de vários catálogos é unificado em um único cartão — unindo PDFs, capas, formatos, idiomas e descrições e contando a evidência de múltiplas fontes.
 - **Ranqueamento inteligente** que combina PDF direto, texto completo (TXT/ePub), quantidade de formatos, confiança da fonte, hospedeiro confiável do PDF, correspondência de título e número de fontes consolidadas.
 - **Anexo de PDFs complementares** a resultados sem PDF na fonte original, com verificação de segurança e correspondência de título.
+- **Conversor de PDF local**: traduz a camada de texto com LibreTranslate/Argos Translate sem chave de API, mantendo páginas, imagens e geometria sempre que possível.
 - **Filtro por idioma** (português, inglês, espanhol, francês, alemão, italiano) com detecção de títulos em português.
 - **Opção de exibir somente resultados com PDF disponível**.
 - **Filtros avançados**: ordenação (relevância, ano, fonte, título), faixa de ano (mín./máx.), formato (PDF, ePub, áudio, texto) e coleção (livro, artigo, audiolivro, texto).
@@ -32,24 +33,26 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 | APIs | Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, arXiv, DOAB, OAPEN |
 | Catálogos HTML | Planet eBook, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, PDFBooksWorld, FreeTechBooks, Bookyards, GetFreeEBooks, eBookLobby, FreeComputerBooks |
 | Acervos adicionais | Portal Domínio Público, Wikisource (pt), Wikilivros, SciELO Livros, DOAB, OAPEN, Biblioteca Brasiliana (USP), Biblioteca Nacional Digital, Biblioteca Digital do Senado, ARCA Fiocruz, Luso Livros, Biblioteca Digital Camões, Literatura Brasileira UFSC |
-| Descoberta | Google Acadêmico, Google `filetype:pdf`, Bing `filetype:pdf`, DuckDuckGo `filetype:pdf` |
+| Descoberta | Google Acadêmico, Google/Bing/DuckDuckGo/Yahoo/Mojeek `filetype:pdf`, consultas de repositórios e bibliotecas digitais |
 
 ## Como funciona
 
 1. A consulta é limpa e normalizada (acentos, espaços, comprimento).
 2. **+20 provedores** (APIs e catálogos HTML) são consultados em paralelo, com timeout por fonte (6 s, 7 s no Internet Archive, 10 s em DOAB/OAPEN).
 3. Se a consulta for um **ISBN**, dois provedores extras resolvem o registro exato.
-4. Em paralelo, **6 buscas `filetype:pdf`** (Google/Bing/DuckDuckGo, exatas e de repositórios) coletam PDFs complementares.
+4. Em paralelo, **11 buscas `filetype:pdf`** (Google/Bing/DuckDuckGo/Yahoo/Mojeek, exatas, por repositório, biblioteca digital e nome de arquivo) coletam PDFs complementares.
 5. Os resultados são deduplicados por URL, **consolidados por semelhança de título/autor** e ranqueados.
 6. PDFs complementares são anexados aos resultados correspondentes.
 
 ## Requisitos
 
 - Node.js 18 ou superior.
+- Python 3.10 ou superior para o conversor de PDF.
 
 ## Executando
 
 ```bash
+./setup-translation.ps1  # primeira vez: instala LibreTranslate e os modelos locais
 npm start
 # ou
 node server.js
@@ -65,6 +68,10 @@ O servidor sobe em `http://127.0.0.1:4173` (defina `PORT` na variável de ambien
 | --- | --- | --- |
 | `PORT` | `4173` | Porta HTTP do servidor |
 | `HTML_SOURCES` | todos | IDs de catálogos HTML a consultar, separados por vírgula (ex.: `planet-ebook,pdfbooksworld`) |
+| `PDF_PYTHON` | `python`/`python3` | Caminho do interpretador Python usado para extrair e reconstruir PDFs |
+| `TRANSLATION_API_URL` | `http://127.0.0.1:5000/translate` | Endpoint local do LibreTranslate; altere somente para usar outro provedor |
+| `TRANSLATION_API_KEY` | vazio | Chave opcional/necessária conforme o provedor de tradução |
+| `PDF_TRANSLATION_MAX_BYTES` | `209715200` | Tamanho máximo do PDF enviado (200 MB) |
 
 ## Verificação
 
@@ -188,6 +195,22 @@ Os resultados consolidados incluem o campo `mergedFrom`, que lista as fontes que
 ### `GET /api/sources`
 
 Lista as fontes disponíveis (nome, tipo de acesso) e os idiomas suportados.
+
+### `POST /api/translate-pdf?source=pt&target=en`
+
+Recebe o PDF bruto no corpo da requisição com `Content-Type: application/pdf` e devolve outro PDF como download. O processo usa `pdfplumber`, `pypdf` e `reportlab`: extrai as linhas da camada de texto, traduz em blocos, cobre o texto original e pinta a tradução dentro das caixas originais, mantendo tamanho, imagens e número de páginas quando possível. Não existe limite artificial de páginas; o limite padrão é de 200 MB por arquivo e pode ser alterado por `PDF_TRANSLATION_MAX_BYTES`.
+
+Para habilitar a função localmente, instale as dependências Python:
+
+```bash
+python -m pip install pdfplumber pypdf reportlab
+```
+
+O endpoint usa por padrão um LibreTranslate local, sem chave de API. Execute `setup-translation.ps1` uma vez para instalar os modelos e depois `start.ps1`, que inicializa o serviço local automaticamente. Para usar outro provedor compatível, configure `TRANSLATION_API_URL` e, quando exigido, `TRANSLATION_API_KEY`. PDFs escaneados sem camada de texto são recusados; aplique OCR antes de enviá-los. A preservação visual é mais fiel em PDFs com fundo branco e texto selecionável, pois traduções podem ser maiores que o original e exigir redução horizontal dentro da mesma linha.
+
+### `POST /api/translate-pdf-url?source=pt&target=en`
+
+Recebe `{ "pdfUrl": "https://..." }` em JSON, baixa um PDF público do resultado selecionado e devolve a versão traduzida. A interface exibe o botão **Traduzir PDF** dentro de cada cartão que possui PDF. O servidor aceita apenas URLs públicas `http(s)`, valida o cabeçalho `%PDF-`, limita o tamanho e bloqueia endereços locais/privados.
 
 ## Considerações sobre direitos autorais
 

@@ -1,8 +1,8 @@
 import server from "./server.js";
 
-const API_PATHS = new Set(["/api/search", "/api/sources", "/api/stats"]);
+const API_PATHS = new Set(["/api/search", "/api/sources", "/api/stats", "/api/translate-pdf", "/api/translate-pdf-url"]);
 
-function callHandler(requestUrl) {
+function callHandler(requestUrl, request) {
   return new Promise((resolve) => {
     const adapter = {
       status: 200,
@@ -15,7 +15,7 @@ function callHandler(requestUrl) {
         resolve(new Response(body, { status: this.status, headers: this.headers }));
       }
     };
-    server.handleRequest(requestUrl, adapter).catch(() => {
+    server.handleRequest(requestUrl, adapter, request).catch(() => {
       resolve(
         new Response(JSON.stringify({ error: "Erro interno no buscador." }), {
           status: 500,
@@ -30,7 +30,7 @@ export default {
   async fetch(request) {
     const requestUrl = new URL(request.url);
     if (API_PATHS.has(requestUrl.pathname)) {
-      return callHandler(requestUrl);
+      return callHandler(requestUrl, request);
     }
     return new Response("Não encontrado.", { status: 404 });
   }

@@ -49,6 +49,20 @@ const statsGrid = document.querySelector("#statsGrid");
 const statsFact = document.querySelector("#statsFact");
 const statsStatus = document.querySelector("#statsStatus");
 const statsLast = document.querySelector("#statsLast");
+const translateForm = document.querySelector("#translateForm");
+const translateFile = document.querySelector("#translateFile");
+const translateSource = document.querySelector("#translateSource");
+const translateTarget = document.querySelector("#translateTarget");
+const translateBtn = document.querySelector("#translateBtn");
+const translateStatus = document.querySelector("#translateStatus");
+const pdfTranslateDialog = document.querySelector("#pdfTranslateDialog");
+const pdfTranslateDialogForm = document.querySelector("#pdfTranslateDialogForm");
+const pdfTranslateBook = document.querySelector("#pdfTranslateBook");
+const pdfTranslateSource = document.querySelector("#pdfTranslateSource");
+const pdfTranslateTarget = document.querySelector("#pdfTranslateTarget");
+const pdfTranslateDialogStatus = document.querySelector("#pdfTranslateDialogStatus");
+const pdfTranslateSubmit = document.querySelector("#pdfTranslateSubmit");
+const pdfTranslateCancel = document.querySelector("#pdfTranslateCancel");
 
 const SHELF_KEY = "biblioteca-arcana-shelf";
 const HISTORY_KEY = "biblioteca-arcana-history";
@@ -93,7 +107,8 @@ const state = {
   filtered: [],
   bestId: null,
   loading: false,
-  owlTimer: null
+  owlTimer: null,
+  pdfTranslationItem: null
 };
 
 const motionReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -141,6 +156,165 @@ async function runSearch() {
   } finally {
     stopLoading();
   }
+}
+
+/* ============ Tradução de PDF ============ */
+
+translateForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const file = translateFile.files?.[0];
+  const source = translateSource.value;
+  const target = translateTarget.value;
+
+  if (!file) {
+    setTranslateStatus("Escolha um arquivo PDF.", true);
+    return;
+  }
+  if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+    setTranslateStatus("O arquivo precisa estar no formato PDF.", true);
+    return;
+  }
+  if (file.size > 200 * 1024 * 1024) {
+    setTranslateStatus("O PDF excede o limite de 200 MB.", true);
+    return;
+  }
+  if (source !== "auto" && source === target) {
+    setTranslateStatus("Escolha idiomas de origem e destino diferentes.", true);
+    return;
+  }
+
+  translateBtn.disabled = true;
+  translateBtn.textContent = "Traduzindo o livro…";
+  setTranslateStatus("Extraindo texto, traduzindo blocos e reconstruindo as páginas…");
+  try {
+    const params = new URLSearchParams({ source, target });
+    const response = await fetch(`/api/translate-pdf?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/pdf" },
+      body: file
+    });
+    if (!response.ok) {
+      let message = "A tradução não pôde ser concluída.";
+      try { message = (await response.json()).error || message; } catch { /* resposta não JSON */ }
+      throw new Error(message);
+    }
+
+    const pages = await downloadTranslatedResponse(
+      response,
+      `livro-traduzido-${source === "auto" ? "detectado" : source}-${target}.pdf`
+    );
+    setTranslateStatus(`PDF traduzido baixado${pages ? ` (${pages} páginas)` : ""}.`, false);
+    toast("O PDF traduzido foi baixado");
+  } catch (error) {
+    setTranslateStatus(error.message || "Falha de rede ao traduzir o PDF.", true);
+  } finally {
+    translateBtn.disabled = false;
+    translateBtn.textContent = "Traduzir e baixar PDF";
+  }
+});
+
+function setTranslateStatus(message, error = false) {
+  translateStatus.textContent = message;
+  translateStatus.classList.toggle("error", error);
+}
+
+async function downloadTranslatedResponse(response, filename) {
+  const translated = await response.blob();
+  const downloadUrl = URL.createObjectURL(translated);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  return response.headers.get("X-PDF-Translation-Pages") || "";
+}
+
+function openPdfTranslation(item) {
+  state.pdfTranslationItem = item;
+  pdfTranslateBook.textContent = `${item.title} · ${item.site || "Acervo"}`;
+  const detected = firstLanguageCode(item.languages);
+  pdfTranslateSource.value = detected || "auto";
+  pdfTranslateTarget.value = detected === "en" ? "pt" : "en";
+  pdfTranslateDialogStatus.textContent = "";
+  pdfTranslateDialogStatus.classList.remove("error");
+  if (typeof pdfTranslateDialog.showModal === "function") {
+    pdfTranslateDialog.showModal();
+  } else {
+    pdfTranslateDialog.setAttribute("open", "");
+  }
+}
+
+function firstLanguageCode(languages) {
+  return (languages || [])
+    .map((language) => String(language || "").toLowerCase().split(/[-_]/)[0])
+    .find((language) => ["pt", "en", "es", "fr", "de", "it", "ja", "zh", "ru"].includes(language)) || "";
+}
+
+pdfTranslateCancel.addEventListener("click", () => {
+  pdfTranslateDialog.close?.();
+  pdfTranslateDialog.removeAttribute("open");
+});
+
+pdfTranslateDialogForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const item = state.pdfTranslationItem;
+  const source = pdfTranslateSource.value;
+  const target = pdfTranslateTarget.value;
+  if (!item?.pdfUrl) return;
+  if (source !== "auto" && source === target) {
+    setPdfTranslateDialogStatus("Escolha idiomas diferentes.", true);
+    return;
+  }
+
+  pdfTranslateSubmit.disabled = true;
+  pdfTranslateCancel.disabled = true;
+  pdfTranslateSubmit.textContent = "Traduzindo…";
+  setPdfTranslateDialogStatus("Baixando o PDF da fonte e traduzindo o livro inteiro…");
+  try {
+    const response = await fetch(`/api/translate-pdf-url?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfUrl: item.pdfUrl })
+    });
+    if (!response.ok) {
+      let message = "A tradução não pôde ser concluída.";
+      try { message = (await response.json()).error || message; } catch { /* resposta não JSON */ }
+      throw new Error(message);
+    }
+    const pages = await downloadTranslatedResponse(
+      response,
+      `livro-${slugifyFilename(item.title)}-traduzido-${target}.pdf`
+    );
+    setPdfTranslateDialogStatus(`PDF baixado${pages ? ` (${pages} páginas)` : ""}.`);
+    toast(`PDF traduzido: ${item.title}`);
+    setTimeout(() => {
+      pdfTranslateDialog.close?.();
+      pdfTranslateDialog.removeAttribute("open");
+    }, 900);
+  } catch (error) {
+    setPdfTranslateDialogStatus(error.message || "Falha de rede ao traduzir o PDF.", true);
+  } finally {
+    pdfTranslateSubmit.disabled = false;
+    pdfTranslateCancel.disabled = false;
+    pdfTranslateSubmit.textContent = "Traduzir e baixar";
+  }
+});
+
+function setPdfTranslateDialogStatus(message, error = false) {
+  pdfTranslateDialogStatus.textContent = message;
+  pdfTranslateDialogStatus.classList.toggle("error", error);
+}
+
+function slugifyFilename(value) {
+  return String(value || "livro")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    .slice(0, 80) || "livro";
 }
 
 /* ============ Carregamento, skeleton e coruja ============ */
@@ -355,6 +529,11 @@ function renderResult(item) {
     ? `PDF verificado em ${item.pdfSourceSite}`
     : "Abrir / baixar PDF";
   setLink(card, ".pdf-link", item.pdfUrl, pdfLabel);
+  const translatePdfButton = card.querySelector(".pdf-translate-link");
+  if (item.pdfUrl) {
+    translatePdfButton.hidden = false;
+    translatePdfButton.addEventListener("click", () => openPdfTranslation(item));
+  }
   if (item.pdfUrl && item.pdfSourceSite && item.pdfSourceSite !== item.site) {
     const origin = card.querySelector(".pdf-origin");
     origin.hidden = false;

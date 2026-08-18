@@ -220,7 +220,95 @@
         </form>
       </section>
 
+      <section class="translate-panel reveal" aria-label="Traduzir PDF">
+        <div class="translate-heading">
+          <span class="eyebrow">Feitiço de tradução</span>
+          <h2>Transforme um PDF para outro idioma</h2>
+          <p>Envie um PDF com camada de texto e receba uma cópia traduzida mantendo páginas, imagens e a geometria original sempre que possível.</p>
+        </div>
+        <form id="translateForm" class="translate-form">
+          <label class="translate-file" for="translateFile">
+            <span>Arquivo PDF</span>
+            <input id="translateFile" type="file" accept="application/pdf,.pdf" required>
+          </label>
+          <label class="filter-field" for="translateSource">Idioma original
+            <select id="translateSource">
+              <option value="auto">Detectar automaticamente</option>
+              <option value="pt">Português</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
+              <option value="ja">日本語</option>
+              <option value="zh">中文</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <label class="filter-field" for="translateTarget">Traduzir para
+            <select id="translateTarget" required>
+              <option value="en">English</option>
+              <option value="pt">Português</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
+              <option value="ja">日本語</option>
+              <option value="zh">中文</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <button id="translateBtn" class="action-btn translate-button" type="submit">Traduzir e baixar PDF</button>
+          <p id="translateStatus" class="translate-status" role="status" aria-live="polite"></p>
+        </form>
+        <p class="translate-note">Limite padrão: 200 MB. Não há limite artificial de páginas; PDFs escaneados precisam passar por OCR antes do envio. O <code>start.ps1</code> inicia o LibreTranslate local sem chave de API.</p>
+      </section>
+
       <div class="toasts" id="toasts" aria-live="polite"></div>
+
+      <dialog id="pdfTranslateDialog" class="pdf-translate-dialog" aria-labelledby="pdfTranslateTitle">
+        <form id="pdfTranslateDialogForm" class="pdf-translate-dialog-form">
+          <div class="translate-heading">
+            <span class="eyebrow">Tradução deste exemplar</span>
+            <h2 id="pdfTranslateTitle">Traduzir PDF</h2>
+            <p id="pdfTranslateBook" class="translate-dialog-book"></p>
+          </div>
+          <div class="translate-dialog-fields">
+            <label class="filter-field" for="pdfTranslateSource">Idioma original
+              <select id="pdfTranslateSource">
+                <option value="auto">Detectar automaticamente</option>
+                <option value="pt">Português</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="it">Italiano</option>
+                <option value="ja">日本語</option>
+                <option value="zh">中文</option>
+                <option value="ru">Русский</option>
+              </select>
+            </label>
+            <label class="filter-field" for="pdfTranslateTarget">Traduzir para
+              <select id="pdfTranslateTarget" required>
+                <option value="en">English</option>
+                <option value="pt">Português</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="it">Italiano</option>
+                <option value="ja">日本語</option>
+                <option value="zh">中文</option>
+                <option value="ru">Русский</option>
+              </select>
+            </label>
+          </div>
+          <p id="pdfTranslateDialogStatus" class="translate-status" role="status" aria-live="polite"></p>
+          <div class="pdf-translate-dialog-actions">
+            <button id="pdfTranslateCancel" class="action-btn" type="button">Cancelar</button>
+            <button id="pdfTranslateSubmit" class="action-btn translate-button" type="submit">Traduzir e baixar</button>
+          </div>
+        </form>
+      </dialog>
 
       <div class="shelf-overlay" id="shelfOverlay" hidden></div>
       <aside class="shelf-panel" id="shelfPanel" aria-label="Minha estante" hidden>
@@ -379,6 +467,7 @@
           <div class="actions">
             <a class="source-link" target="_blank" rel="noreferrer">Fonte original</a>
             <a class="pdf-link" target="_blank" rel="noreferrer">Baixar PDF</a>
+            <button class="pdf-translate-link" type="button" hidden>Traduzir PDF</button>
             <a class="epub-link" target="_blank" rel="noreferrer">Baixar ePub</a>
             <a class="reader-link" target="_blank" rel="noreferrer">Ler / imprimir PDF</a>
           </div>

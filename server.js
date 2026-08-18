@@ -19,6 +19,9 @@ const HTML_SEARCH_TIMEOUT_MS = 1500;
 const HTML_DETAIL_TIMEOUT_MS = 2200;
 const PDF_DISCOVERY_TIMEOUT_MS = 2400;
 const HTML_CONCURRENCY = 6;
+const PDF_TRANSLATION_MAX_BYTES = Number(process.env.PDF_TRANSLATION_MAX_BYTES || 200 * 1024 * 1024);
+const PDF_TRANSLATION_API_URL =
+  process.env.TRANSLATION_API_URL || "http://127.0.0.1:5000/translate";
 const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEARCH_CACHE_MAX_ENTRIES = 50;
 const MAX_RESULTS = 36;
@@ -56,6 +59,13 @@ const TRUSTED_PDF_HOST_SUFFIXES = [
   "wikibooks.org",
   "wikimedia.org",
   "arxiv.org",
+  "zenodo.org",
+  "core.ac.uk",
+  "doaj.org",
+  "standardebooks.org",
+  "oercommons.org",
+  "europeana.eu",
+  "hathitrust.org",
   "oapen.org",
   "doabooks.org"
 ];
@@ -378,6 +388,53 @@ const DISCOVERY_SOURCES = [
       `https://html.duckduckgo.com/html/?q=${encode(`filetype:pdf "${query}" "public domain" OR "open access"`)}`,
     access: "Busca web; verificar direitos na fonte",
     pdfPolicy: "source-only"
+  },
+  {
+    id: "yahoo-pdf",
+    name: "Yahoo Search filetype:pdf",
+    searchUrl: (query) =>
+      `https://search.yahoo.com/search?p=${encode(`filetype:pdf "${query}" "open access" OR "public domain"`)}`,
+    access: "Busca web; verificar direitos na fonte",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "mojeek-pdf",
+    name: "Mojeek filetype:pdf",
+    searchUrl: (query) =>
+      `https://www.mojeek.com/search?q=${encode(`filetype:pdf "${query}"`)}`,
+    access: "Busca web independente; verificar direitos na fonte",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "zenodo-pdf",
+    name: "Zenodo",
+    searchUrl: (query) =>
+      `https://www.google.com/search?q=${encode(`site:zenodo.org/records filetype:pdf "${query}"`)}`,
+    access: "Repositório aberto de publicações e dados",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "core-pdf",
+    name: "CORE",
+    searchUrl: (query) => `https://core.ac.uk/search?q=${encode(query)}`,
+    access: "Agregador de pesquisa de acesso aberto",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "open-textbooks",
+    name: "Open Textbook Library",
+    searchUrl: (query) =>
+      `https://open.umn.edu/opentextbooks/search?query=${encode(query)}`,
+    access: "Livros didáticos abertos",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "standard-ebooks",
+    name: "Standard Ebooks",
+    searchUrl: (query) =>
+      `https://standardebooks.org/ebooks?query=${encode(query)}`,
+    access: "Edições livres de domínio público",
+    pdfPolicy: "source-only"
   }
 ];
 
@@ -470,10 +527,20 @@ const SOURCE_PAYLOAD = {
   )
 };
 
-async function handleRequest(requestUrl, response) {
+async function handleRequest(requestUrl, response, request = null) {
   try {
     if (requestUrl.pathname === "/api/search") {
       await handleSearch(requestUrl, response);
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/translate-pdf") {
+      await handlePdfTranslation(requestUrl, response, request);
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/translate-pdf-url") {
+      await handlePdfUrlTranslation(requestUrl, response, request);
       return;
     }
 
@@ -500,10 +567,288 @@ if (require.main === module && isNodeRuntime) {
   const http = require("http");
   http.createServer((request, response) => {
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
-    handleRequest(requestUrl, response);
+    handleRequest(requestUrl, response, request);
   }).listen(PORT, () => {
     console.log(`Buscador global de livros: http://127.0.0.1:${PORT}`);
   });
+}
+
+async function handlePdfTranslation(requestUrl, response, request) {
+  const source = normalizeTranslationLanguage(requestUrl.searchParams.get("source"), true);
+  const target = normalizeTranslationLanguage(requestUrl.searchParams.get("target"), false);
+
+  if (!source || !target || source === target) {
+    sendJson(
+      response,
+      { error: "Informe idiomas de origem e destino diferentes (códigos ISO, como pt e en)." },
+      400
+    );
+    return;
+  }
+
+  try {
+    const pdf = await readPdfRequestBody(request);
+    const translated = await translatePdfBuffer(pdf, source, target);
+    sendTranslatedPdf(response, translated, source, target);
+  } catch (error) {
+    const status = Number(error.statusCode || 502);
+    sendJson(response, { error: readableError(error) }, status);
+  }
+}
+
+async function handlePdfUrlTranslation(requestUrl, response, request) {
+  const source = normalizeTranslationLanguage(requestUrl.searchParams.get("source"), true);
+  const target = normalizeTranslationLanguage(requestUrl.searchParams.get("target"), false);
+
+  if (!source || !target || source === target) {
+    sendJson(response, { error: "Informe idiomas de origem e destino diferentes." }, 400);
+    return;
+  }
+
+  try {
+    const body = await readJsonRequestBody(request);
+    const pdfUrl = String(body.pdfUrl || "").trim();
+    if (!isAllowedRemotePdfUrl(pdfUrl)) {
+      const error = new Error("O link do PDF não é um endereço público http(s) válido.");
+      error.statusCode = 400;
+      throw error;
+    }
+    const pdf = await fetchRemotePdf(pdfUrl);
+    const translated = await translatePdfBuffer(pdf, source, target);
+    sendTranslatedPdf(response, translated, source, target);
+  } catch (error) {
+    const status = Number(error.statusCode || 502);
+    sendJson(response, { error: readableError(error) }, status);
+  }
+}
+
+function sendTranslatedPdf(response, translated, source, target) {
+  response.writeHead(200, {
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `attachment; filename="livro-traduzido-${source}-${target}.pdf"`,
+    "Content-Length": String(translated.buffer.length),
+    "X-PDF-Translation-Pages": String(translated.pages),
+    "X-PDF-Translation-Characters": String(translated.characters),
+    "Cache-Control": "no-store"
+  });
+  response.end(translated.buffer);
+}
+
+function normalizeTranslationLanguage(value, allowAuto) {
+  const language = String(value || "").trim().toLowerCase();
+  if (allowAuto && language === "auto") return language;
+  return /^[a-z]{2,3}$/.test(language) ? language : "";
+}
+
+async function readPdfRequestBody(request) {
+  if (!request) {
+    const error = new Error("Envie o arquivo PDF no corpo da requisição.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const contentType = String(request.headers?.["content-type"] || request.headers?.get?.("content-type") || "").toLowerCase();
+  if (contentType && !contentType.includes("application/pdf") && !contentType.includes("application/octet-stream")) {
+    const error = new Error("O endpoint aceita apenas um PDF enviado como application/pdf.");
+    error.statusCode = 415;
+    throw error;
+  }
+
+  let buffer;
+  if (typeof request.arrayBuffer === "function") {
+    const contentLength = Number(request.headers?.get?.("content-length") || 0);
+    if (contentLength > PDF_TRANSLATION_MAX_BYTES) {
+      const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+      error.statusCode = 413;
+      throw error;
+    }
+    buffer = Buffer.from(await request.arrayBuffer());
+  } else {
+    const contentLength = Number(request.headers?.["content-length"] || 0);
+    if (contentLength > PDF_TRANSLATION_MAX_BYTES) {
+      const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+      error.statusCode = 413;
+      throw error;
+    }
+    const chunks = [];
+    let received = 0;
+    for await (const chunk of request) {
+      received += chunk.length;
+      if (received > PDF_TRANSLATION_MAX_BYTES) {
+        const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+        error.statusCode = 413;
+        throw error;
+      }
+      chunks.push(chunk);
+    }
+    buffer = Buffer.concat(chunks);
+  }
+
+  if (!buffer.length || buffer.subarray(0, 5).toString() !== "%PDF-") {
+    const error = new Error("O arquivo enviado não parece ser um PDF válido.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return buffer;
+}
+
+async function readJsonRequestBody(request) {
+  if (!request) {
+    const error = new Error("Envie os dados da tradução no corpo da requisição.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  let raw;
+  if (typeof request.json === "function") {
+    return request.json();
+  }
+
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of request) {
+    received += chunk.length;
+    if (received > 64 * 1024) {
+      const error = new Error("Os dados da tradução excedem o limite permitido.");
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  raw = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const error = new Error("Os dados da tradução não são JSON válidos.");
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function isAllowedRemotePdfUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol)) return false;
+    const host = url.hostname.toLowerCase();
+    if (!host || host === "localhost" || host.endsWith(".localhost") || host === "0.0.0.0") return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.)/.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return false;
+    if (host === "::1" || host.startsWith("fc") || host.startsWith("fd")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchRemotePdf(pdfUrl) {
+  const response = await fetchWithTimeout(pdfUrl, Math.max(PROVIDER_TIMEOUT_MS, 15000), {
+    headers: {
+      Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.5",
+      "User-Agent": USER_AGENT
+    }
+  });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  if (!isAllowedRemotePdfUrl(response.url || pdfUrl)) {
+    const error = new Error("O redirecionamento do PDF não aponta para um endereço público.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > PDF_TRANSLATION_MAX_BYTES) {
+    const error = new Error(`O PDF remoto excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+    error.statusCode = 413;
+    throw error;
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > PDF_TRANSLATION_MAX_BYTES) {
+    const error = new Error(`O PDF remoto excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+    error.statusCode = 413;
+    throw error;
+  }
+  if (!buffer.length || buffer.subarray(0, 5).toString() !== "%PDF-") {
+    const error = new Error("O endereço não retornou um PDF válido.");
+    error.statusCode = 415;
+    throw error;
+  }
+  return buffer;
+}
+
+async function translatePdfBuffer(pdfBuffer, source, target) {
+  if (!isNodeRuntime) {
+    const error = new Error("A tradução de PDFs precisa ser executada no servidor local com Python e pdfplumber instalados.");
+    error.statusCode = 501;
+    throw error;
+  }
+
+  const fileSystem = await getFileSystem();
+  const crypto = require("crypto");
+  const { spawn } = require("child_process");
+  const baseDir = path.join(__dirname, "tmp", "pdfs");
+  await fileSystem.mkdir(baseDir, { recursive: true });
+  const token = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+  const inputPath = path.join(baseDir, `source-${token}.pdf`);
+  const outputPath = path.join(baseDir, `translated-${token}.pdf`);
+  const scriptPath = path.join(__dirname, "translate_pdf.py");
+  const python = process.env.PDF_PYTHON || (process.platform === "win32" ? "python" : "python3");
+
+  try {
+    await fileSystem.writeFile(inputPath, pdfBuffer);
+    const args = [
+      scriptPath,
+      inputPath,
+      outputPath,
+      "--source",
+      source,
+      "--target",
+      target,
+      "--api-url",
+      PDF_TRANSLATION_API_URL,
+      "--api-key",
+      process.env.TRANSLATION_API_KEY || ""
+    ];
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(python, args, { windowsHide: true });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+      child.on("error", (error) => reject(error));
+      child.on("close", (code) => {
+        if (code !== 0) {
+          const detail = (stderr || stdout || `Tradutor terminou com código ${code}`).trim();
+          let message = detail;
+          try {
+            const parsed = JSON.parse(detail.split(/\r?\n/).pop() || "{}");
+            message = parsed.error || message;
+          } catch {
+            // Mantém a mensagem original do processo Python.
+          }
+          const error = new Error(message);
+          error.statusCode = code === 2 ? 422 : 502;
+          reject(error);
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout.trim().split(/\r?\n/).pop() || "{}"));
+        } catch {
+          reject(new Error("O tradutor não retornou um resumo válido."));
+        }
+      });
+    });
+    const buffer = await fileSystem.readFile(outputPath);
+    return { buffer, pages: result.pages || 0, characters: result.characters || 0 };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      error.message = "Python não foi encontrado. Configure PDF_PYTHON com o caminho do interpretador.";
+      error.statusCode = 503;
+    }
+    throw error;
+  } finally {
+    await Promise.all([
+      fileSystem.unlink(inputPath).catch(() => {}),
+      fileSystem.unlink(outputPath).catch(() => {})
+    ]);
+  }
 }
 
 async function handleSearch(requestUrl, response) {
@@ -717,33 +1062,21 @@ async function runProvider(source, query, language) {
 async function findComplementaryPdfCandidates(query, language) {
   const queries = buildAdvancedPdfQueries(query, language);
   try {
+    const webSearches = [
+      ["Google PDF exato", `https://www.google.com/search?q=${encode(queries.exact)}`],
+      ["Bing PDF exato", `https://www.bing.com/search?q=${encode(queries.exact)}`],
+      ["DuckDuckGo PDF exato", `https://html.duckduckgo.com/html/?q=${encode(queries.exact)}`],
+      ["Yahoo PDF exato", `https://search.yahoo.com/search?p=${encode(queries.exact)}`],
+      ["Mojeek PDF exato", `https://www.mojeek.com/search?q=${encode(queries.exact)}`],
+      ["Google repositórios abertos", `https://www.google.com/search?q=${encode(queries.repositories)}`],
+      ["Bing repositórios abertos", `https://www.bing.com/search?q=${encode(queries.repositories)}`],
+      ["DuckDuckGo repositórios abertos", `https://html.duckduckgo.com/html/?q=${encode(queries.repositories)}`],
+      ["Google acervos digitais", `https://www.google.com/search?q=${encode(queries.digitalLibraries)}`],
+      ["Bing acervos digitais", `https://www.bing.com/search?q=${encode(queries.digitalLibraries)}`],
+      ["Google nome de arquivo", `https://www.google.com/search?q=${encode(queries.fileName)}`]
+    ];
     const rawCandidates = await withTimeout(
-      Promise.all([
-        searchPdfSearchEngine({
-          site: "Google PDF aberto",
-          searchUrl: `https://www.google.com/search?q=${encode(queries.googleExact)}`
-        }),
-        searchPdfSearchEngine({
-          site: "Bing PDF aberto",
-          searchUrl: `https://www.bing.com/search?q=${encode(queries.bingExact)}`
-        }),
-        searchPdfSearchEngine({
-          site: "DuckDuckGo PDF aberto",
-          searchUrl: `https://html.duckduckgo.com/html/?q=${encode(queries.bingExact)}`
-        }),
-        searchPdfSearchEngine({
-          site: "Google repositórios abertos",
-          searchUrl: `https://www.google.com/search?q=${encode(queries.googleRepositories)}`
-        }),
-        searchPdfSearchEngine({
-          site: "Bing repositórios abertos",
-          searchUrl: `https://www.bing.com/search?q=${encode(queries.bingRepositories)}`
-        }),
-        searchPdfSearchEngine({
-          site: "DuckDuckGo repositórios abertos",
-          searchUrl: `https://html.duckduckgo.com/html/?q=${encode(queries.bingRepositories)}`
-        })
-      ]),
+      Promise.all(webSearches.map(([site, searchUrl]) => searchPdfSearchEngine({ site, searchUrl }))),
       PDF_DISCOVERY_TIMEOUT_MS
     );
     const candidates = dedupePdfCandidates(rawCandidates.flat())
@@ -779,12 +1112,14 @@ function buildAdvancedPdfQueries(query, language) {
   const rights = languageTerms[language] || languageTerms.any;
   const phrase = cleanQuery(query).replace(/["()]/g, " ").trim();
   const exact = `intitle:"${phrase}" filetype:pdf (${rights})`;
-  const repositories = `"${phrase}" filetype:pdf (site:archive.org OR site:arxiv.org OR site:doaj.org OR site:scielo.org OR site:gov.br OR site:edu.br)`;
+  const repositories = `"${phrase}" filetype:pdf (site:archive.org OR site:arxiv.org OR site:zenodo.org OR site:core.ac.uk OR site:doaj.org OR site:scielo.org OR site:oapen.org OR site:doabooks.org OR site:gov.br OR site:edu.br)`;
+  const digitalLibraries = `"${phrase}" filetype:pdf (site:dominiopublico.gov.br OR site:bn.gov.br OR site:senado.leg.br OR site:usp.br OR site:ufsc.br OR site:fiocruz.br OR site:instituto-camoes.pt OR site:openstax.org OR site:standardebooks.org)`;
+  const fileName = `filetype:pdf ("${phrase}" OR ${phrase.replace(/\s+/g, "_")} OR ${phrase.replace(/\s+/g, "-")}) (${rights})`;
   return {
-    googleExact: exact,
-    bingExact: exact,
-    googleRepositories: repositories,
-    bingRepositories: repositories
+    exact,
+    repositories,
+    digitalLibraries,
+    fileName
   };
 }
 
