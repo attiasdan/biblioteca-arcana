@@ -1347,6 +1347,26 @@ a.catalog-chip:hover {
   height: 13px;
 }
 
+.footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(243, 234, 215, 0.6);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(200, 154, 71, 0.35);
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.footer-link:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.footer-link svg {
+  width: 13px;
+  height: 13px;
+}
+
 .loading .search-panel {
   animation: searchGlow 2.1s ease-in-out infinite;
 }
