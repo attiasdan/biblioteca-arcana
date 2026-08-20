@@ -66,6 +66,15 @@ const TRUSTED_PDF_HOST_SUFFIXES = [
   "oercommons.org",
   "europeana.eu",
   "hathitrust.org",
+  "globalgreyebooks.com",
+  "fadedpage.com",
+  "gallica.bnf.fr",
+  "cervantesvirtual.com",
+  "gutenberg.net.au",
+  "loc.gov",
+  "memory.loc.gov",
+  "semanticscholar.org",
+  "bne.es",
   "oapen.org",
   "doabooks.org"
 ];
@@ -101,7 +110,6 @@ const ORIGINAL_SITES = [
   "FreeTechBooks",
   "Bookyards",
   "GetFreeEBooks",
-  "eBookLobby",
   "FreeComputerBooks",
   "LibriVox",
   "ManyBooks"
@@ -123,11 +131,21 @@ const ADDITIONAL_SITES = [
   "Google filetype:pdf",
   "Bing filetype:pdf",
   "DuckDuckGo filetype:pdf",
+  "Brave Search filetype:pdf",
+  "Startpage filetype:pdf",
+  "Ecosia filetype:pdf",
+  "Yandex filetype:pdf",
   "Google Acadêmico",
   "OpenAlex",
   "Crossref",
   "arXiv",
-  "OAPEN"
+  "OAPEN",
+  "DOAJ",
+  "Semantic Scholar",
+  "Gallica (Bibliothèque nationale de France)",
+  "Faded Page",
+  "Global Grey Ebooks",
+  "Internet Archive Torrents"
 ];
 
 const HTML_SOURCES = [
@@ -218,15 +236,6 @@ const HTML_SOURCES = [
     baseUrl: "https://www.getfreeebooks.com",
     searchUrl: (query) => `https://www.getfreeebooks.com/?s=${encode(query)}`,
     access: "Free ebook posts",
-    pdfPolicy: "source-only"
-  },
-  {
-    id: "ebooklobby",
-    name: "eBookLobby",
-    baseUrl: "https://www.ebooklobby.com",
-    searchUrl: (query) =>
-      `https://www.ebooklobby.com/search/default.aspx?q=${encode(query)}`,
-    access: "Free catalog",
     pdfPolicy: "source-only"
   },
   {
@@ -406,6 +415,46 @@ const DISCOVERY_SOURCES = [
     pdfPolicy: "source-only"
   },
   {
+    id: "brave-pdf",
+    name: "Brave Search filetype:pdf",
+    searchUrl: (query) =>
+      `https://search.brave.com/search?q=${encode(`filetype:pdf "${query}" "public domain" OR "open access"`)}`,
+    access: "Busca web; verificar direitos na fonte",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "startpage-pdf",
+    name: "Startpage filetype:pdf",
+    searchUrl: (query) =>
+      `https://www.startpage.com/sp/search?query=${encode(`filetype:pdf "${query}" "public domain" OR "open access"`)}`,
+    access: "Busca web privada; verificar direitos na fonte",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "ecosia-pdf",
+    name: "Ecosia filetype:pdf",
+    searchUrl: (query) =>
+      `https://www.ecosia.org/search?q=${encode(`filetype:pdf "${query}" "public domain" OR "open access"`)}`,
+    access: "Busca web; verificar direitos na fonte",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "global-grey",
+    name: "Global Grey Ebooks",
+    searchUrl: (query) =>
+      `https://www.google.com/search?q=${encode(`site:globalgreyebooks.com "${query}"`)}`,
+    access: "Ebooks clássicos de domínio público com PDF e epub",
+    pdfPolicy: "source-only"
+  },
+  {
+    id: "internet-archive-torrents",
+    name: "Internet Archive Torrents",
+    searchUrl: (query) =>
+      `https://archive.org/advancedsearch.php?q=${encode(`title:(${query}) AND mediatype:texts`)}&fl[]=identifier&fl[]=title&rows=10&output=json`,
+    access: "Torrents oficiais de textos do Internet Archive",
+    pdfPolicy: "source-only"
+  },
+  {
     id: "zenodo-pdf",
     name: "Zenodo",
     searchUrl: (query) =>
@@ -512,6 +561,30 @@ const API_SOURCES = [
     access: "Livros acadêmicos open access",
     timeoutMs: 10000,
     provider: searchOapen
+  },
+  {
+    id: "semantic-scholar",
+    name: "Semantic Scholar",
+    access: "Artigos científicos com PDF de acesso aberto",
+    provider: searchSemanticScholar
+  },
+  {
+    id: "doaj",
+    name: "DOAJ",
+    access: "Artigos científicos de acesso aberto com texto completo",
+    provider: searchDoajArticles
+  },
+  {
+    id: "gallica",
+    name: "Gallica (Bibliothèque nationale de France)",
+    access: "Acervo digital público com PDF",
+    provider: searchGallica
+  },
+  {
+    id: "faded-page",
+    name: "Faded Page",
+    access: "Ebooks de domínio público (Canadá) com PDF",
+    provider: searchFadedPage
   }
 ];
 
@@ -952,10 +1025,11 @@ async function performSearch(query, language = "any") {
       ]
     : [];
   const pdfDiscoveryJob = findComplementaryPdfCandidates(query, language);
+  const torrentDiscoveryJob = findComplementaryTorrentCandidates(query, language);
 
   const settled = await Promise.all([...apiJobs, htmlJob, ...isbnJobs]);
   const settledEntries = settled.flatMap((entry) => (Array.isArray(entry) ? entry : [entry]));
-  const pdfDiscovery = await pdfDiscoveryJob;
+  const [pdfDiscovery, torrentDiscovery] = await Promise.all([pdfDiscoveryJob, torrentDiscoveryJob]);
   const providerStatus = settledEntries.map(({ source, ok, error, count, discarded }) => ({
     id: source.id,
     name: source.name,
@@ -972,6 +1046,14 @@ async function performSearch(query, language = "any") {
     count: pdfDiscovery.candidates.length,
     discarded: pdfDiscovery.discarded
   });
+  providerStatus.push({
+    id: "torrent-discovery",
+    name: "Torrent (Internet Archive)",
+    ok: torrentDiscovery.ok,
+    error: torrentDiscovery.error,
+    count: torrentDiscovery.candidates.length,
+    discarded: 0
+  });
 
   const allResults = settledEntries.flatMap((entry) => entry.results);
   const complementaryCandidates = dedupePdfCandidates([
@@ -980,7 +1062,12 @@ async function performSearch(query, language = "any") {
   ]);
   const ranked = rankResults(dedupeResults(allResults), query);
   const consolidated = fuzzyGroupResults(ranked);
-  const enriched = attachComplementaryPdfs(consolidated.slice(0, MAX_RESULTS), complementaryCandidates, query, language);
+  const base = attachComplementaryPdfs(consolidated.slice(0, MAX_RESULTS), complementaryCandidates, query, language);
+  const withTorrents = attachComplementaryTorrents(base, torrentDiscovery.candidates, query, language);
+  const torrentCards = torrentCandidatesToResults(torrentDiscovery.candidates, query, language, withTorrents);
+  const enriched = fuzzyGroupResults(
+    rankResults(dedupeResults([...withTorrents, ...torrentCards]), query)
+  ).slice(0, MAX_RESULTS);
 
   return {
     query, language,
@@ -993,6 +1080,7 @@ async function performSearch(query, language = "any") {
       language === "any" ? "Resultados em todos os idiomas; priorizamos textos completos e PDFs." : `Filtro de idioma ativo: ${SUPPORTED_LANGUAGES[language].label}.`,
       "PDFs encontrados em fontes abertas podem ser anexados ao resultado, inclusive quando vierem de outra fonte.",
       "Buscas filetype:pdf entram como descoberta complementar, com filtro por fonte pública ou confiável.",
+      "Obras em domínio público no Internet Archive também podem ser baixadas pelo torrent oficial da própria instituição.",
       "Resultados do mesmo livro vindos de catálogos diferentes são consolidados em um só cartão."
     ]
   };
@@ -1068,12 +1156,20 @@ async function findComplementaryPdfCandidates(query, language) {
       ["DuckDuckGo PDF exato", `https://html.duckduckgo.com/html/?q=${encode(queries.exact)}`],
       ["Yahoo PDF exato", `https://search.yahoo.com/search?p=${encode(queries.exact)}`],
       ["Mojeek PDF exato", `https://www.mojeek.com/search?q=${encode(queries.exact)}`],
+      ["Brave PDF exato", `https://search.brave.com/search?q=${encode(queries.exact)}`],
+      ["Startpage PDF exato", `https://www.startpage.com/sp/search?query=${encode(queries.exact)}`],
+      ["Ecosia PDF exato", `https://www.ecosia.org/search?q=${encode(queries.exact)}`],
+      ["Yandex PDF exato", `https://yandex.com/search/?text=${encode(queries.exact)}`],
       ["Google repositórios abertos", `https://www.google.com/search?q=${encode(queries.repositories)}`],
       ["Bing repositórios abertos", `https://www.bing.com/search?q=${encode(queries.repositories)}`],
       ["DuckDuckGo repositórios abertos", `https://html.duckduckgo.com/html/?q=${encode(queries.repositories)}`],
       ["Google acervos digitais", `https://www.google.com/search?q=${encode(queries.digitalLibraries)}`],
       ["Bing acervos digitais", `https://www.bing.com/search?q=${encode(queries.digitalLibraries)}`],
-      ["Google nome de arquivo", `https://www.google.com/search?q=${encode(queries.fileName)}`]
+      ["Google nome de arquivo", `https://www.google.com/search?q=${encode(queries.fileName)}`],
+      ["Google livros abertos", `https://www.google.com/search?q=${encode(queries.openBooks)}`],
+      ...(looksLikeIsbn(query)
+        ? [["Google ISBN/PDF", `https://www.google.com/search?q=${encode(queries.isbnQuery)}`]]
+        : [])
     ];
     const rawCandidates = await withTimeout(
       Promise.all(webSearches.map(([site, searchUrl]) => searchPdfSearchEngine({ site, searchUrl }))),
@@ -1081,7 +1177,7 @@ async function findComplementaryPdfCandidates(query, language) {
     );
     const candidates = dedupePdfCandidates(rawCandidates.flat())
       .filter((candidate) => isSafePdfCandidate(candidate, query, language))
-      .slice(0, 12);
+      .slice(0, 16);
 
     return {
       ok: true,
@@ -1111,15 +1207,20 @@ function buildAdvancedPdfQueries(query, language) {
   };
   const rights = languageTerms[language] || languageTerms.any;
   const phrase = cleanQuery(query).replace(/["()]/g, " ").trim();
+  const isbn = looksLikeIsbn(phrase) ? normalizeIsbn(phrase) : "";
   const exact = `intitle:"${phrase}" filetype:pdf (${rights})`;
-  const repositories = `"${phrase}" filetype:pdf (site:archive.org OR site:arxiv.org OR site:zenodo.org OR site:core.ac.uk OR site:doaj.org OR site:scielo.org OR site:oapen.org OR site:doabooks.org OR site:gov.br OR site:edu.br)`;
-  const digitalLibraries = `"${phrase}" filetype:pdf (site:dominiopublico.gov.br OR site:bn.gov.br OR site:senado.leg.br OR site:usp.br OR site:ufsc.br OR site:fiocruz.br OR site:instituto-camoes.pt OR site:openstax.org OR site:standardebooks.org)`;
+  const repositories = `"${phrase}" filetype:pdf (site:archive.org OR site:arxiv.org OR site:zenodo.org OR site:core.ac.uk OR site:doaj.org OR site:scielo.org OR site:oapen.org OR site:doabooks.org OR site:gov.br OR site:edu.br OR site:loc.gov OR site:hathitrust.org OR site:unpaywall.org OR site:redalyc.org)`;
+  const digitalLibraries = `"${phrase}" filetype:pdf (site:dominiopublico.gov.br OR site:bn.gov.br OR site:senado.leg.br OR site:usp.br OR site:ufsc.br OR site:fiocruz.br OR site:instituto-camoes.pt OR site:openstax.org OR site:standardebooks.org OR site:gallica.bnf.fr OR site:globalgreyebooks.com OR site:fadedpage.com OR site:cervantesvirtual.com OR site:gutenberg.net.au OR site:bne.es)`;
   const fileName = `filetype:pdf ("${phrase}" OR ${phrase.replace(/\s+/g, "_")} OR ${phrase.replace(/\s+/g, "-")}) (${rights})`;
+  const openBooks = `"${phrase}" (${rights}) (site:standardebooks.org OR site:globalgreyebooks.com OR site:fadedpage.com OR site:planetebook.com OR site:gutenberg.net.au)`;
+  const isbnQuery = isbn ? `intitle:"${phrase}" OR "${isbn}" filetype:pdf` : exact;
   return {
     exact,
     repositories,
     digitalLibraries,
-    fileName
+    fileName,
+    openBooks,
+    isbnQuery
   };
 }
 
@@ -1167,6 +1268,81 @@ function attachComplementaryPdfs(results, candidates, query, language = "any") {
   });
 }
 
+async function findComplementaryTorrentCandidates(query) {
+  const params = new URLSearchParams();
+  params.set("q", `title:(${cleanQuery(query)}) AND mediatype:texts`);
+  params.append("fl[]", "identifier");
+  params.append("fl[]", "title");
+  params.set("rows", "6");
+  params.set("page", "1");
+  params.set("output", "json");
+
+  try {
+    const data = await fetchJson(`https://archive.org/advancedsearch.php?${params}`, INTERNET_ARCHIVE_TIMEOUT_MS);
+    const docs = (data.response && data.response.docs) || [];
+    const candidates = docs
+      .filter((doc) => doc.identifier && doc.title)
+      .map((doc) => ({
+        title: doc.title,
+        identifier: doc.identifier,
+        pdfUrl: "",
+        torrentUrl: `https://archive.org/download/${encodeURIComponent(doc.identifier)}/${encodeURIComponent(doc.identifier)}_archive.torrent`,
+        sourceUrl: `https://archive.org/details/${encodeURIComponent(doc.identifier)}`,
+        site: "Internet Archive (torrent)",
+        discoveredBy: "busca de torrent no Internet Archive"
+      }));
+    return { ok: true, error: null, candidates };
+  } catch (error) {
+    return { ok: false, error: readableError(error), candidates: [] };
+  }
+}
+
+function attachComplementaryTorrents(results, candidates, query, language = "any") {
+  if (!candidates.length) return results;
+
+  return results.map((entry) => {
+    if (entry.torrentUrl) return entry;
+
+    const match = candidates.find((candidate) => torrentCandidateMatchesResult(candidate, entry, query, language));
+    if (!match) return entry;
+
+    return {
+      ...entry,
+      torrentUrl: match.torrentUrl,
+      torrentSourceSite: match.site,
+      torrentDiscoveredBy: match.discoveredBy,
+      availability: entry.pdfUrl ? entry.availability : "Torrent do Internet Archive",
+      formats: uniqueBy([...entry.formats, "Torrent"], (item) => item)
+    };
+  });
+}
+
+function torrentCandidatesToResults(candidates, query, language = "any", existing = []) {
+  const existingTorrents = new Set(existing.map((entry) => normalize(entry.torrentUrl || "")).filter(Boolean));
+  return candidates
+    .filter((candidate) => candidate.torrentUrl && !existingTorrents.has(normalize(candidate.torrentUrl)))
+    .filter((candidate) => matchesQuery({ title: candidate.title, sourceUrl: candidate.sourceUrl }, query))
+    .filter((candidate) => language !== "pt" || looksPortugueseTitle(candidate.title))
+    .slice(0, 2)
+    .map((candidate) =>
+      result({
+        sourceId: "internet-archive",
+        site: candidate.site,
+        title: candidate.title,
+        sourceUrl: candidate.sourceUrl,
+        torrentUrl: candidate.torrentUrl,
+        torrentSourceSite: candidate.site,
+        torrentDiscoveredBy: candidate.discoveredBy,
+        availability: "Torrent oficial do Internet Archive",
+        languages: [],
+        formats: ["Torrent"],
+        rights: "Verificar direitos e acesso no item do Internet Archive",
+        confidence: 0.72,
+        description: "Obra disponível no Internet Archive; baixe o torrent oficial da própria instituição."
+      })
+    );
+}
+
 function pdfCandidatesFromResults(results) {
   return results
     .filter((entry) => entry.pdfUrl)
@@ -1180,12 +1356,20 @@ function pdfCandidatesFromResults(results) {
 }
 
 function pdfCandidateMatchesResult(candidate, entry, query, language = "any") {
-  const candidateText = normalize(`${candidate.title} ${fileNameText(candidate.pdfUrl)}`);
+  return candidateMatchesResult(candidate, entry, query, language, "");
+}
+
+function torrentCandidateMatchesResult(candidate, entry, query, language = "any") {
+  return candidateMatchesResult(candidate, entry, query, language, candidate.identifier || "");
+}
+
+function candidateMatchesResult(candidate, entry, query, language = "any", extraText = "") {
+  const candidateText = normalize(`${candidate.title} ${fileNameText(candidate.pdfUrl || candidate.sourceUrl || "")} ${extraText}`);
   const entryText = normalize(`${entry.title} ${asArray(entry.authors).join(" ")}`);
   const queryTokens = tokenize(query);
 
   if (!candidateText || !entryText || !queryTokens.length) return false;
-  if (language === "pt" && !looksPortugueseTitle(`${candidate.title} ${fileNameText(candidate.pdfUrl)}`)) return false;
+  if (language === "pt" && !looksPortugueseTitle(`${candidate.title} ${fileNameText(candidate.pdfUrl || candidate.sourceUrl || "")}`)) return false;
 
   const queryHits = queryTokens.filter((token) => candidateText.includes(token)).length;
   if (queryHits < Math.min(2, queryTokens.length)) return false;
@@ -1248,7 +1432,10 @@ const OPEN_LIBRARY_FIELDS = [
   "has_fulltext",
   "public_scan_b",
   "cover_i",
-  "language"
+  "language",
+  "number_of_pages_median",
+  "publisher",
+  "isbn"
 ].join(",");
 
 function mapOpenLibraryDoc(doc) {
@@ -1267,6 +1454,9 @@ function mapOpenLibraryDoc(doc) {
     title: doc.title,
     authors: doc.author_name || [],
     year: doc.first_publish_year,
+    publisher: asArray(doc.publisher)[0],
+    pageCount: doc.number_of_pages_median || "",
+    isbn: pickIsbn(doc.isbn),
     sourceUrl: `https://openlibrary.org${doc.key}`,
     coverUrl: doc.cover_i
       ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
@@ -1314,7 +1504,7 @@ async function searchGutenberg(query) {
 async function searchGoogleBooks(query) {
   const url =
     `https://www.googleapis.com/books/v1/volumes?q=${encode(query)}` +
-    "&printType=books&projection=lite&maxResults=8";
+    "&printType=books&maxResults=8";
   const data = await fetchJson(url);
 
   return (data.items || []).slice(0, 8).map((item) => {
@@ -1329,6 +1519,9 @@ async function searchGoogleBooks(query) {
       title: info.title,
       authors: info.authors || [],
       year: yearFromDate(info.publishedDate),
+      publisher: info.publisher,
+      pageCount: info.pageCount || "",
+      isbn: pickIsbn((info.industryIdentifiers || []).map((identifier) => identifier.identifier)),
       sourceUrl: info.infoLink || info.previewLink || `https://books.google.com/books?id=${item.id}`,
       pdfUrl,
       coverUrl: info.imageLinks && (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail),
@@ -1361,22 +1554,27 @@ async function searchInternetArchive(query) {
 
   const data = await fetchJson(`https://archive.org/advancedsearch.php?${params}`);
   const docs = (data.response && data.response.docs) || [];
-  const pdfEntries = await Promise.all(
-    docs.slice(0, 4).map(async (doc) => [doc.identifier, await findInternetArchivePdf(doc.identifier)])
+  const detailsEntries = await Promise.all(
+    docs.slice(0, 4).map(async (doc) => [doc.identifier, await fetchInternetArchiveDetails(doc.identifier)])
   );
-  const pdfByIdentifier = new Map(pdfEntries);
+  const detailsByIdentifier = new Map(detailsEntries);
 
   return docs.slice(0, 6).map((doc) => {
-    const pdfUrl = pdfByIdentifier.get(doc.identifier) || "";
+    const details = detailsByIdentifier.get(doc.identifier) || {};
+    const pdfUrl = details.pdfUrl || "";
     return result({
       site: "Internet Archive",
       sourceId: "internet-archive",
       title: doc.title,
       authors: asArray(doc.creator),
       year: doc.year,
+      publisher: details.publisher,
+      pageCount: details.pageCount,
+      isbn: details.isbn,
       sourceUrl: `https://archive.org/details/${doc.identifier}`,
       pdfUrl,
       coverUrl: `https://archive.org/services/img/${doc.identifier}`,
+      torrentUrl: `https://archive.org/download/${encodeURIComponent(doc.identifier)}/${encodeURIComponent(doc.identifier)}_archive.torrent`,
       availability: pdfUrl ? "PDF direto" : "Item de texto",
       languages: asArray(doc.language),
       formats: pdfUrl ? ["PDF"] : [],
@@ -1415,7 +1613,7 @@ async function searchOpenAlex(query, language) {
 }
 
 async function searchCrossref(query) {
-  const data = await fetchJson(`https://api.crossref.org/works?query.bibliographic=${encode(query)}&rows=8&select=title,author,published,URL,DOI,link,container-title,language,type`);
+  const data = await fetchJson(`https://api.crossref.org/works?query.bibliographic=${encode(query)}&rows=8&select=title,author,published,URL,DOI,link,container-title,type`);
   const items = (data.message && data.message.items) || [];
   return items.map((item) => {
     const links = item.link || [];
@@ -1426,6 +1624,7 @@ async function searchCrossref(query) {
       title: asArray(item.title)[0],
       authors: (item.author || []).map((author) => [author.given, author.family].filter(Boolean).join(" ")),
       year: item.published && item.published["date-parts"] && item.published["date-parts"][0] && item.published["date-parts"][0][0],
+      publisher: cleanText(item.publisher),
       sourceUrl: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : ""),
       pdfUrl: pdf && pdf.URL,
       availability: pdf ? "PDF indicado pelo editor" : "Registro acadêmico / DOI",
@@ -1539,6 +1738,8 @@ async function searchDspaceBooks(sourceId, site, baseUrl, query) {
       title,
       authors,
       year,
+      publisher: cleanText((meta["dc.publisher"] || [])[0]),
+      pageCount: pageCountFromExtent((meta["dc.format.extent"] || meta["dc.format"] || [])[0]),
       sourceUrl,
       pdfUrl,
       availability: pdfUrl ? "PDF de acesso aberto" : "Livro de acesso aberto",
@@ -1549,6 +1750,203 @@ async function searchDspaceBooks(sourceId, site, baseUrl, query) {
       description: firstSentence(meta["dc.description.abstract"] && meta["dc.description.abstract"][0])
     });
   });
+}
+
+async function searchSemanticScholar(query) {
+  const data = await fetchJson(
+    `https://api.semanticscholar.org/graph/v1/paper/search?query=${encode(query)}&limit=8&fields=title,authors,year,url,openAccessPdf,externalIds,venue`
+  );
+
+  return (data.data || []).slice(0, 8).map((paper) => {
+    const pdfUrl = paper.openAccessPdf && paper.openAccessPdf.url ? paper.openAccessPdf.url : "";
+    const doi = paper.externalIds && paper.externalIds.DOI ? paper.externalIds.DOI : "";
+
+    return result({
+      site: "Semantic Scholar",
+      sourceId: "semantic-scholar",
+      title: paper.title,
+      authors: (paper.authors || []).map((author) => author.name),
+      year: paper.year,
+      sourceUrl: paper.url || (doi ? `https://doi.org/${doi}` : ""),
+      pdfUrl,
+      availability: pdfUrl ? "PDF de acesso aberto" : "Registro acadêmico",
+      languages: [],
+      formats: pdfUrl ? ["PDF", "Artigo científico"] : ["Artigo científico"],
+      rights: "Acesso e licença informados pela fonte do artigo",
+      confidence: pdfUrl ? 0.92 : 0.78,
+      description: paper.venue ? `Publicado em ${paper.venue}.` : "Registro do índice Semantic Scholar."
+    });
+  });
+}
+
+async function searchDoajArticles(query) {
+  const data = await fetchJson(
+    `https://doaj.org/api/search/articles/${encodeURIComponent(cleanQuery(query))}?pageSize=8`
+  );
+  const items = (data.results || []).slice(0, 8);
+
+  return items.map((item) => {
+    const bib = item.bibjson || {};
+    const links = asArray(bib.link || []);
+    const fulltext = links.find((link) => String(link.type || "").toLowerCase() === "fulltext");
+    const pdfLink = links.find((link) => /\.pdf(?:$|[?#])/i.test(link.url || ""));
+    const pdfUrl = (pdfLink && pdfLink.url) || (fulltext && fulltext.url) || "";
+    const sourceUrl =
+      (fulltext && fulltext.url) ||
+      (pdfLink && pdfLink.url) ||
+      (Array.isArray(bib.url) && bib.url[0]) ||
+      "";
+    const journal = bib.journal || {};
+
+    return result({
+      site: "DOAJ",
+      sourceId: "doaj",
+      title: cleanText(bib.title) || "Título não informado",
+      authors: asArray(bib.author || []).map((author) => author.name).filter(Boolean),
+      year: bib.year,
+      publisher: cleanText(bib.publisher),
+      sourceUrl,
+      pdfUrl,
+      availability: pdfUrl ? "Artigo de acesso aberto (PDF)" : "Artigo de acesso aberto",
+      languages: journal.language ? [journal.language] : [],
+      formats: pdfUrl ? ["PDF", "Artigo científico"] : ["Artigo científico"],
+      rights: "Acesso aberto conforme o DOAJ e o periódico",
+      confidence: 0.86,
+      description: journal.title ? `Publicado em ${journal.title}.` : "Registro do diretório DOAJ."
+    });
+  });
+}
+
+async function searchGallica(query) {
+  const clean = cleanQuery(query).replace(/["()]/g, " ").replace(/\s+/g, " ").trim();
+  const sru =
+    `https://gallica.bnf.fr/SRU?version=1.2&operation=searchRetrieve` +
+    `&query=${encode(`dc.title all "${clean}"`)}&maximumRecords=8`;
+  const xml = await fetchText(sru, PROVIDER_TIMEOUT_MS);
+  const records = xml.split(/<srw:record>/).slice(1).map((block) => {
+    const grab = (tag) => {
+      const match = block.match(new RegExp(`<dc:${tag}>([\\s\\S]*?)</dc:${tag}>`, "i"));
+      return match ? decodeHtml(match[1]).replace(/\s+/g, " ").trim() : "";
+    };
+    const arkMatch = block.match(/ark:\/\d+\/([0-9A-Za-z]+)/);
+    const arkSuffix = arkMatch ? arkMatch[1] : "";
+    const rights = normalize(grab("rights"));
+    const year = yearFromDate(grab("date"));
+    const publicDomain =
+      rights.includes("dominio publico") ||
+      rights.includes("public domain") ||
+      (Boolean(year) && Number(year) < 1928);
+    return {
+      title: grab("title"),
+      creator: grab("creator"),
+      date: grab("date"),
+      subject: grab("subject"),
+      language: grab("language"),
+      arkSuffix,
+      publicDomain
+    };
+  });
+
+  return records
+    .filter((record) => record.title && record.arkSuffix)
+    .slice(0, 8)
+    .map((record) => {
+      const pdfUrl = record.publicDomain
+        ? `https://gallica.bnf.fr/ark:/12148/${record.arkSuffix}.pdf`
+        : "";
+      return result({
+        site: "Gallica (Bibliothèque nationale de France)",
+        sourceId: "gallica",
+        title: record.title,
+        authors: record.creator
+          ? record.creator.split(";").map((part) => part.trim()).filter(Boolean)
+          : [],
+        year: yearFromDate(record.date),
+        sourceUrl: `https://gallica.bnf.fr/ark:/12148/${record.arkSuffix}`,
+        pdfUrl,
+        availability: pdfUrl ? "PDF em domínio público" : "Acervo digital público",
+        languages: record.language ? [record.language] : ["fr"],
+        formats: pdfUrl ? ["PDF"] : [],
+        rights: record.publicDomain ? "Domínio público" : "Verificar direitos na fonte",
+        confidence: pdfUrl ? 0.84 : 0.72,
+        description: record.subject ? `Assuntos: ${record.subject}.` : "Obra digitalizada pela Bibliothèque nationale de France."
+      });
+    });
+}
+
+let fadedPageCatalog = null;
+let fadedPageCatalogAt = 0;
+const FADED_PAGE_CATALOG_TTL_MS = 60 * 60 * 1000;
+
+async function fetchFadedPageCatalog() {
+  const now = Date.now();
+  if (fadedPageCatalog && now - fadedPageCatalogAt < FADED_PAGE_CATALOG_TTL_MS) {
+    return fadedPageCatalog;
+  }
+  const url =
+    "https://www.fadedpage.com/csearc2.php?title=&author=&plang=&category=&publisher=&pubdate=&tags=&bookid=&sort=";
+  const data = await fetchJson(url, INTERNET_ARCHIVE_TIMEOUT_MS);
+  fadedPageCatalog = data.rows || [];
+  fadedPageCatalogAt = now;
+  return fadedPageCatalog;
+}
+
+async function searchFadedPage(query) {
+  const rows = await fetchFadedPageCatalog();
+  const queryTokens = tokenize(query);
+  const candidates = rows
+    .map((row) => {
+      const author = (row.authors || [])
+        .filter((item) => item.type === "author" || item.type === "creator")
+        .map((item) => item.realname)
+        .join(" ");
+      const text = normalize(`${row.title} ${author}`);
+      const hits = queryTokens.filter((token) => text.includes(token)).length;
+      return { row, author, hits };
+    })
+    .filter((entry) => entry.hits >= Math.min(2, queryTokens.length))
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, 2);
+
+  const detailed = await Promise.all(
+    candidates.map(async ({ row, author }) => {
+      const pageUrl = `https://www.fadedpage.com/showbook.php?pid=${row.pid}`;
+      const { pdfUrl, epubUrl } = await findBookFormatLinksFromPage(pageUrl);
+      return result({
+        site: "Faded Page",
+        sourceId: "faded-page",
+        title: cleanText(row.title) || "Título não informado",
+        authors: author
+          ? author.split(",").map((part) => part.trim()).filter(Boolean)
+          : [],
+        year: row.first_publication,
+        publisher: cleanText(row.publisher),
+        pageCount: row.pages || "",
+        sourceUrl: pageUrl,
+        pdfUrl,
+        epubUrl,
+        availability: pdfUrl ? "PDF direto" : "Ebook de domínio público",
+        languages: row.lang ? [row.lang] : ["en"],
+        formats: ["EPUB", "Kindle", ...(pdfUrl ? ["PDF"] : [])],
+        rights: "Domínio público no Canadá; verificar as leis do seu país",
+        confidence: 0.88,
+        description: firstSentence(row.description)
+      });
+    })
+  );
+  return detailed;
+}
+
+async function findBookFormatLinksFromPage(pageUrl) {
+  try {
+    const html = await fetchText(pageUrl, HTML_DETAIL_TIMEOUT_MS);
+    const links = extractLinks(html, pageUrl);
+    const pdf = links.find((link) => /\.pdf(?:$|[?#])/i.test(link.href));
+    const epub = links.find((link) => /\.epub(?:$|[?#])/i.test(link.href));
+    return { pdfUrl: pdf ? pdf.href : "", epubUrl: epub ? epub.href : "" };
+  } catch {
+    return { pdfUrl: "", epubUrl: "" };
+  }
 }
 
 async function searchLibriVox(query) {
@@ -1673,7 +2071,12 @@ async function searchHtmlSource(source, query) {
 }
 
 async function findInternetArchivePdf(identifier) {
-  if (!identifier) return "";
+  const details = await fetchInternetArchiveDetails(identifier);
+  return details.pdfUrl;
+}
+
+async function fetchInternetArchiveDetails(identifier) {
+  if (!identifier) return { pdfUrl: "", publisher: "", pageCount: "", isbn: "" };
 
   try {
     const metadata = await fetchJson(`https://archive.org/metadata/${encodeURIComponent(identifier)}`, HTML_DETAIL_TIMEOUT_MS);
@@ -1681,11 +2084,18 @@ async function findInternetArchivePdf(identifier) {
     const pdf =
       files.find((file) => isPreferredPdf(file)) ||
       files.find((file) => file.name && /\.pdf$/i.test(file.name));
+    const meta = metadata.metadata || {};
 
-    if (!pdf || !pdf.name) return "";
-    return `https://archive.org/download/${encodeURIComponent(identifier)}/${encodePath(pdf.name)}`;
+    return {
+      pdfUrl: pdf && pdf.name
+        ? `https://archive.org/download/${encodeURIComponent(identifier)}/${encodePath(pdf.name)}`
+        : "",
+      publisher: cleanText(asArray(meta.publisher)[0]).replace(/[,\s;]+$/g, ""),
+      pageCount: cleanText(meta.page_count || meta.pages || ""),
+      isbn: pickIsbn(asArray(meta.isbn))
+    };
   } catch {
-    return "";
+    return { pdfUrl: "", publisher: "", pageCount: "", isbn: "" };
   }
 }
 
@@ -1840,8 +2250,11 @@ function result(data) {
     site: data.site || "",
     category: categoryFor(data.site || "", formats),
     title: cleanText(data.title) || "Título não informado",
-    authors: asArray(data.authors).map(cleanText).filter(Boolean).slice(0, 4),
+    authors: asArray(data.authors).map(cleanText).filter(Boolean).slice(0, 6),
     year: cleanText(data.year),
+    publisher: cleanText(data.publisher),
+    pageCount: cleanText(data.pageCount),
+    isbn: cleanText(data.isbn),
     sourceUrl: data.sourceUrl || "",
     pdfUrl: data.pdfUrl || "",
     pdfVerified: Boolean(data.pdfVerified),
@@ -1851,6 +2264,9 @@ function result(data) {
     pdfSourceUrl: data.pdfSourceUrl || "",
     pdfSourceSite: cleanText(data.pdfSourceSite || (data.pdfUrl ? data.site : "")),
     pdfDiscoveredBy: cleanText(data.pdfDiscoveredBy || ""),
+    torrentUrl: data.torrentUrl || "",
+    torrentSourceSite: cleanText(data.torrentSourceSite || ""),
+    torrentDiscoveredBy: cleanText(data.torrentDiscoveredBy || ""),
     coverUrl: normalizeImageUrl(data.coverUrl || ""),
     availability: data.availability || "Verificar na fonte",
     languages,
@@ -2052,6 +2468,7 @@ function rankResults(results, query) {
         (entry.pdfUrl ? 1.4 : 0) +
         (entry.isCatalogSearch ? -0.5 : 0) +
         (entry.textUrl || entry.epubUrl ? 0.5 : 0) +
+        (entry.torrentUrl ? 0.1 : 0) +
         Math.min((entry.formats || []).length, 3) * 0.12 +
         ((entry.mergedFrom || []).length > 1 ? 0.35 : 0) +
         (entry.pdfUrl && isTrustedPdfHost(hostName(entry.pdfUrl)) ? 0.25 : 0) +
@@ -2133,7 +2550,15 @@ function mergeEntries(base, other) {
   if (!merged.coverUrl && other.coverUrl) merged.coverUrl = other.coverUrl;
   if (!merged.epubUrl && other.epubUrl) merged.epubUrl = other.epubUrl;
   if (!merged.textUrl && other.textUrl) merged.textUrl = other.textUrl;
+  if (!merged.torrentUrl && other.torrentUrl) {
+    merged.torrentUrl = other.torrentUrl;
+    merged.torrentSourceSite = other.torrentSourceSite || "";
+    merged.torrentDiscoveredBy = other.torrentDiscoveredBy || merged.torrentDiscoveredBy;
+  }
   if (!merged.description && other.description) merged.description = other.description;
+  if (!merged.publisher && other.publisher) merged.publisher = other.publisher;
+  if (!merged.pageCount && other.pageCount) merged.pageCount = other.pageCount;
+  if (!merged.isbn && other.isbn) merged.isbn = other.isbn;
 
   merged.formats = uniqueBy([...asArray(merged.formats), ...asArray(other.formats)], (item) => normalize(item)).slice(0, 6);
   merged.languages = uniqueBy([...asArray(merged.languages), ...asArray(other.languages)], (item) => normalize(item));
@@ -2148,6 +2573,16 @@ function mergeEntries(base, other) {
 function looksLikeIsbn(value) {
   const clean = String(value || "").replace(/[\s-]/g, "");
   return /^(?:\d{9}[\dXx]|\d{13})$/.test(clean);
+}
+
+function pickIsbn(values) {
+  const candidates = asArray(values).map(normalizeIsbn).filter(Boolean);
+  return candidates.find((item) => /^97[89]/.test(item)) || candidates.find(looksLikeIsbn) || "";
+}
+
+function pageCountFromExtent(value) {
+  const match = String(value || "").match(/(\d{2,5})\s*p/i);
+  return match ? match[1] : "";
 }
 
 function normalizeIsbn(value) {
@@ -2200,6 +2635,7 @@ function buildStatistics() {
     `O cache guarda até ${SEARCH_CACHE_MAX_ENTRIES} buscas por ${cacheTtlMinutes} minutos. Se 100 pessoas procurarem o mesmo livro em uma hora, metade delas não precisa refazer o trabalho.`,
     `Com ${languages} idiomas e 4 filtros de formato (PDF, ePub, áudio e texto), existem ${formatCombinations} combinações básicas de filtro — além do interruptor "Somente PDF".`,
     `${trustedPdfHosts} domínios são considerados fontes confiáveis de PDF público; qualquer arquivo vindo de fora deles passa por conferência extra antes de ser anexado.`,
+    `Textos de domínio público no Internet Archive podem ser baixados pelo torrent oficial da própria instituição, além do download direto do PDF.`,
     `A busca equilibra ${API_SOURCES.length} bases com API dedicada e ${HTML_SOURCES.length} catálogos navegados por página, combinando velocidade e cobertura.`
   ];
 

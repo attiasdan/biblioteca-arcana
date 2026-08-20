@@ -260,6 +260,15 @@
           </label>
           <button id="translateBtn" class="action-btn translate-button" type="submit">Traduzir e baixar PDF</button>
           <p id="translateStatus" class="translate-status" role="status" aria-live="polite"></p>
+          <div id="translateProgress" class="pdf-progress" hidden>
+            <div class="progress-info">
+              <span id="translateProgressText">Preparando a tradução…</span>
+              <span id="translateProgressEta">estimando…</span>
+            </div>
+            <div class="progress-track" role="progressbar" aria-label="Progresso estimado da tradução do PDF" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="translateProgressBar" class="progress-bar"></div>
+            </div>
+          </div>
         </form>
         <p class="translate-note">Limite padrão: 200 MB. Não há limite artificial de páginas; PDFs escaneados precisam passar por OCR antes do envio. O <code>start.ps1</code> inicia o LibreTranslate local sem chave de API.</p>
       </section>
@@ -303,6 +312,15 @@
             </label>
           </div>
           <p id="pdfTranslateDialogStatus" class="translate-status" role="status" aria-live="polite"></p>
+          <div id="pdfTranslateProgress" class="pdf-progress" hidden>
+            <div class="progress-info">
+              <span id="pdfTranslateProgressText">Preparando a tradução…</span>
+              <span id="pdfTranslateProgressEta">estimando…</span>
+            </div>
+            <div class="progress-track" role="progressbar" aria-label="Progresso estimado da tradução do PDF" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="pdfTranslateProgressBar" class="progress-bar"></div>
+            </div>
+          </div>
           <div class="pdf-translate-dialog-actions">
             <button id="pdfTranslateCancel" class="action-btn" type="button">Cancelar</button>
             <button id="pdfTranslateSubmit" class="action-btn translate-button" type="submit">Traduzir e baixar</button>
@@ -431,6 +449,7 @@
           </div>
           <h2 class="title"></h2>
           <p class="authors"></p>
+          <p class="book-meta" hidden></p>
           <div class="format-row"></div>
           <p class="pdf-origin" hidden></p>
           <div class="detail-controls" aria-label="Informações sobre o livro">
@@ -468,8 +487,9 @@
             <a class="source-link" target="_blank" rel="noreferrer">Fonte original</a>
             <a class="pdf-link" target="_blank" rel="noreferrer">Baixar PDF</a>
             <button class="pdf-translate-link" type="button" hidden>Traduzir PDF</button>
-            <a class="epub-link" target="_blank" rel="noreferrer">Baixar ePub</a>
+<a class="epub-link" target="_blank" rel="noreferrer">Baixar ePub</a>
             <a class="reader-link" target="_blank" rel="noreferrer">Ler / imprimir PDF</a>
+            <a class="torrent-link" target="_blank" rel="noreferrer">Baixar via torrent</a>
           </div>
         </div>
       </article>

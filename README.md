@@ -6,14 +6,16 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 
 ## Funcionalidades
 
-- **Busca simultânea e paralela** em catálogos com API pública: Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, **arXiv**, **DOAB** e **OAPEN**.
-- **Todos os catálogos HTML ativos** (Planet eBook, PDFBooksWorld, FreeComputerBooks, GetFreeEBooks, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, FreeTechBooks, Bookyards, eBookLobby) com limite de concorrência (6) para não sobrecarregar as fontes.
+- **Busca simultânea e paralela** em catálogos com API pública: Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, **arXiv**, **DOAB**, **OAPEN**, **Semantic Scholar**, **DOAJ** e **Gallica (BnF)**.
+- **Todos os catálogos HTML ativos** (Planet eBook, PDFBooksWorld, FreeComputerBooks, GetFreeEBooks, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, FreeTechBooks, Bookyards, **Faded Page**) com limite de concorrência (6) para não sobrecarregar as fontes.
 - **Busca precisa por ISBN** (ISBN-10/13): resolve o registro direto no Open Library e no Google Books, sem depender de correspondência textual.
-- **Descoberta complementar de PDFs** em 11 buscas simultâneas na web (Google, Bing, DuckDuckGo, Yahoo e Mojeek), combinando título exato, repositórios acadêmicos, bibliotecas digitais e variações do nome do arquivo, com filtro de domínios confiáveis (`archive.org`, `zenodo.org`, `core.ac.uk`, `gov.br`, `edu.br`, `scielo.org`, `arxiv.org`, `oapen.org`, `doabooks.org`, entre outros).
+- **Descoberta complementar de PDFs** em 16 buscas simultâneas na web (Google, Bing, DuckDuckGo, Yahoo, Mojeek, **Brave, Startpage, Ecosia e Yandex**), combinando título exato, ISBN, repositórios acadêmicos, bibliotecas digitais e variações do nome do arquivo, com filtro de domínios confiáveis (`archive.org`, `zenodo.org`, `core.ac.uk`, `gov.br`, `edu.br`, `scielo.org`, `arxiv.org`, `oapen.org`, `doabooks.org`, `gallica.bnf.fr`, `globalgreyebooks.com`, `fadedpage.com`, entre outros).
+- **Torrent oficial do Internet Archive**: obras em domínio público ganham link para o arquivo `.torrent` oficial da própria instituição, tanto nos resultados do Internet Archive quanto anexado a resultados equivalentes de outras fontes.
 - **Consolidação fuzzy de duplicatas**: o mesmo livro vindo de vários catálogos é unificado em um único cartão — unindo PDFs, capas, formatos, idiomas e descrições e contando a evidência de múltiplas fontes.
+- **Metadados enriquecidos**: autores completos, editora, número de páginas e ISBN (com preferência por ISBN-13) são exibidos no cartão quando a fonte os fornece (Open Library, Google Books, Internet Archive, Faded Page, DOAB/OAPEN, Crossref e DOAJ).
 - **Ranqueamento inteligente** que combina PDF direto, texto completo (TXT/ePub), quantidade de formatos, confiança da fonte, hospedeiro confiável do PDF, correspondência de título e número de fontes consolidadas.
 - **Anexo de PDFs complementares** a resultados sem PDF na fonte original, com verificação de segurança e correspondência de título.
-- **Conversor de PDF local**: traduz a camada de texto com LibreTranslate/Argos Translate sem chave de API, mantendo páginas, imagens e geometria sempre que possível.
+- **Conversor de PDF local**: traduz a camada de texto com LibreTranslate/Argos Translate sem chave de API, com tradução concorrente em blocos (mantendo páginas, imagens e geometria sempre que possível).
 - **Filtro por idioma** (português, inglês, espanhol, francês, alemão, italiano) com detecção de títulos em português.
 - **Opção de exibir somente resultados com PDF disponível**.
 - **Filtros avançados**: ordenação (relevância, ano, fonte, título), faixa de ano (mín./máx.), formato (PDF, ePub, áudio, texto) e coleção (livro, artigo, audiolivro, texto).
@@ -30,19 +32,20 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 
 | Tipo | Fontes |
 | --- | --- |
-| APIs | Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, arXiv, DOAB, OAPEN |
-| Catálogos HTML | Planet eBook, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, PDFBooksWorld, FreeTechBooks, Bookyards, GetFreeEBooks, eBookLobby, FreeComputerBooks |
-| Acervos adicionais | Portal Domínio Público, Wikisource (pt), Wikilivros, SciELO Livros, DOAB, OAPEN, Biblioteca Brasiliana (USP), Biblioteca Nacional Digital, Biblioteca Digital do Senado, ARCA Fiocruz, Luso Livros, Biblioteca Digital Camões, Literatura Brasileira UFSC |
-| Descoberta | Google Acadêmico, Google/Bing/DuckDuckGo/Yahoo/Mojeek `filetype:pdf`, consultas de repositórios e bibliotecas digitais |
+| APIs | Internet Archive, Open Library, Project Gutenberg, Google Books, LibriVox, Wikisource (pt), Wikilivros, OpenAlex, Crossref, arXiv, DOAB, OAPEN, Semantic Scholar, DOAJ, Gallica (BnF) |
+| Catálogos HTML | Planet eBook, Free-eBooks.net, ManyBooks, BookBub, BookBoon, Feedbooks, Smashwords, PDFBooksWorld, FreeTechBooks, Bookyards, GetFreeEBooks, FreeComputerBooks, Faded Page |
+| Acervos adicionais | Portal Domínio Público, Wikisource (pt), Wikilivros, SciELO Livros, DOAB, OAPEN, Biblioteca Brasiliana (USP), Biblioteca Nacional Digital, Biblioteca Digital do Senado, ARCA Fiocruz, Luso Livros, Biblioteca Digital Camões, Literatura Brasileira UFSC, Global Grey Ebooks |
+| Descoberta | Google Acadêmico, Google/Bing/DuckDuckGo/Yahoo/Mojeek/Brave/Startpage/Ecosia/Yandex `filetype:pdf`, consultas de repositórios e bibliotecas digitais |
+| Torrent | Torrent oficial do Internet Archive (`.torrent` de textos em domínio público) |
 
 ## Como funciona
 
 1. A consulta é limpa e normalizada (acentos, espaços, comprimento).
 2. **+20 provedores** (APIs e catálogos HTML) são consultados em paralelo, com timeout por fonte (6 s, 7 s no Internet Archive, 10 s em DOAB/OAPEN).
 3. Se a consulta for um **ISBN**, dois provedores extras resolvem o registro exato.
-4. Em paralelo, **11 buscas `filetype:pdf`** (Google/Bing/DuckDuckGo/Yahoo/Mojeek, exatas, por repositório, biblioteca digital e nome de arquivo) coletam PDFs complementares.
+4. Em paralelo, **16 buscas `filetype:pdf`** (Google/Bing/DuckDuckGo/Yahoo/Mojeek/Brave/Startpage/Ecosia/Yandex, exatas, por repositório, biblioteca digital e nome de arquivo) coletam PDFs complementares, e uma busca por **torrents oficiais** é feita no Internet Archive.
 5. Os resultados são deduplicados por URL, **consolidados por semelhança de título/autor** e ranqueados.
-6. PDFs complementares são anexados aos resultados correspondentes.
+6. PDFs complementares são anexados aos resultados correspondentes, e torrents do Internet Archive são oferecidos para obras equivalentes; quando o torrent encontrado não tem um resultado equivalente, ele aparece como cartão próprio ("Internet Archive (torrent)").
 
 ## Requisitos
 
@@ -71,6 +74,8 @@ O servidor sobe em `http://127.0.0.1:4173` (defina `PORT` na variável de ambien
 | `PDF_PYTHON` | `python`/`python3` | Caminho do interpretador Python usado para extrair e reconstruir PDFs |
 | `TRANSLATION_API_URL` | `http://127.0.0.1:5000/translate` | Endpoint local do LibreTranslate; altere somente para usar outro provedor |
 | `TRANSLATION_API_KEY` | vazio | Chave opcional/necessária conforme o provedor de tradução |
+| `TRANSLATION_CONCURRENCY` | `8` | Requisições simultâneas ao serviço de tradução (reduzido automaticamente para MyMemory) |
+| `TRANSLATION_CHUNK_CHARS` | `1800` | Tamanho máximo de caracteres por bloco enviado ao tradutor |
 | `PDF_TRANSLATION_MAX_BYTES` | `209715200` | Tamanho máximo do PDF enviado (200 MB) |
 
 ## Verificação
@@ -129,7 +134,7 @@ npm run deploy   # publica direto
 
 ### Limites do plano gratuito da Cloudflare
 
-- 100.000 requisições/dia e 50 sub-requests por requisição (a busca faz ~31-37, dentro do limite).
+- 100.000 requisições/dia e 50 sub-requests por requisição (a busca faz ~42-48, dentro do limite).
 - 10 ms de CPU por requisição; se a busca mais pesada estourar, o plano pago (US$ 5/mês) eleva para 30 s.
 
 ## Estrutura
@@ -174,6 +179,7 @@ Resposta (JSON):
       "authors": ["Machado de Assis"],
       "pdfUrl": "https://...",
       "pdfSourceSite": "archive.org",
+      "torrentUrl": "https://archive.org/download/.../..._archive.torrent",
       "availability": "PDF direto",
       "languages": ["pt"],
       "formats": ["PDF"],
@@ -198,7 +204,7 @@ Lista as fontes disponíveis (nome, tipo de acesso) e os idiomas suportados.
 
 ### `POST /api/translate-pdf?source=pt&target=en`
 
-Recebe o PDF bruto no corpo da requisição com `Content-Type: application/pdf` e devolve outro PDF como download. O processo usa `pdfplumber`, `pypdf` e `reportlab`: extrai as linhas da camada de texto, traduz em blocos, cobre o texto original e pinta a tradução dentro das caixas originais, mantendo tamanho, imagens e número de páginas quando possível. Não existe limite artificial de páginas; o limite padrão é de 200 MB por arquivo e pode ser alterado por `PDF_TRANSLATION_MAX_BYTES`.
+Recebe o PDF bruto no corpo da requisição com `Content-Type: application/pdf` e devolve outro PDF como download. O processo usa `pdfminer` (motor do pdfplumber), `pypdf` e `reportlab`: extrai as linhas da camada de texto por caracteres, traduz em blocos com requisições **concorrentes** (padrão `TRANSLATION_CONCURRENCY=8`), cobre o texto original e pinta a tradução dentro das caixas originais, mantendo tamanho, imagens e número de páginas quando possível. Não existe limite artificial de páginas; o limite padrão é de 200 MB por arquivo e pode ser alterado por `PDF_TRANSLATION_MAX_BYTES`.
 
 Para habilitar a função localmente, instale as dependências Python:
 

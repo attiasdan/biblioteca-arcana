@@ -504,7 +504,7 @@ input[type="search"]:focus {
 }
 
 .search-note {
-  color: #766d5d;
+  color: #6f6757;
   font-size: 0.78rem;
 }
 
@@ -685,6 +685,17 @@ input[type="search"]:focus {
 
 .translate-status.error {
   color: #8b2f35;
+}
+
+.pdf-progress {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.pdf-progress[hidden] {
+  display: none;
 }
 
 .progress-info {
@@ -1019,6 +1030,13 @@ input[type="search"]:focus {
 
 .authors:empty {
   display: none;
+}
+
+.book-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .pdf-origin {

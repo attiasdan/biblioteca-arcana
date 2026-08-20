@@ -63,6 +63,20 @@ const pdfTranslateTarget = document.querySelector("#pdfTranslateTarget");
 const pdfTranslateDialogStatus = document.querySelector("#pdfTranslateDialogStatus");
 const pdfTranslateSubmit = document.querySelector("#pdfTranslateSubmit");
 const pdfTranslateCancel = document.querySelector("#pdfTranslateCancel");
+const translationProgress = {
+  upload: {
+    wrap: document.querySelector("#translateProgress"),
+    text: document.querySelector("#translateProgressText"),
+    eta: document.querySelector("#translateProgressEta"),
+    bar: document.querySelector("#translateProgressBar")
+  },
+  remote: {
+    wrap: document.querySelector("#pdfTranslateProgress"),
+    text: document.querySelector("#pdfTranslateProgressText"),
+    eta: document.querySelector("#pdfTranslateProgressEta"),
+    bar: document.querySelector("#pdfTranslateProgressBar")
+  }
+};
 
 const SHELF_KEY = "biblioteca-arcana-shelf";
 const HISTORY_KEY = "biblioteca-arcana-history";
@@ -108,7 +122,8 @@ const state = {
   bestId: null,
   loading: false,
   owlTimer: null,
-  pdfTranslationItem: null
+  pdfTranslationItem: null,
+  translationTimers: { upload: null, remote: null }
 };
 
 const motionReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -186,6 +201,7 @@ translateForm.addEventListener("submit", async (event) => {
   translateBtn.disabled = true;
   translateBtn.textContent = "Traduzindo o livro…";
   setTranslateStatus("Extraindo texto, traduzindo blocos e reconstruindo as páginas…");
+  startTranslationProgress("upload", estimateTranslationSeconds(file.size));
   try {
     const params = new URLSearchParams({ source, target });
     const response = await fetch(`/api/translate-pdf?${params}`, {
@@ -208,6 +224,7 @@ translateForm.addEventListener("submit", async (event) => {
   } catch (error) {
     setTranslateStatus(error.message || "Falha de rede ao traduzir o PDF.", true);
   } finally {
+    finishTranslationProgress("upload", !translateStatus.classList.contains("error"));
     translateBtn.disabled = false;
     translateBtn.textContent = "Traduzir e baixar PDF";
   }
@@ -272,6 +289,7 @@ pdfTranslateDialogForm.addEventListener("submit", async (event) => {
   pdfTranslateCancel.disabled = true;
   pdfTranslateSubmit.textContent = "Traduzindo…";
   setPdfTranslateDialogStatus("Baixando o PDF da fonte e traduzindo o livro inteiro…");
+  startTranslationProgress("remote", 90);
   try {
     const response = await fetch(`/api/translate-pdf-url?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`, {
       method: "POST",
@@ -296,6 +314,7 @@ pdfTranslateDialogForm.addEventListener("submit", async (event) => {
   } catch (error) {
     setPdfTranslateDialogStatus(error.message || "Falha de rede ao traduzir o PDF.", true);
   } finally {
+    finishTranslationProgress("remote", !pdfTranslateDialogStatus.classList.contains("error"));
     pdfTranslateSubmit.disabled = false;
     pdfTranslateCancel.disabled = false;
     pdfTranslateSubmit.textContent = "Traduzir e baixar";
@@ -305,6 +324,64 @@ pdfTranslateDialogForm.addEventListener("submit", async (event) => {
 function setPdfTranslateDialogStatus(message, error = false) {
   pdfTranslateDialogStatus.textContent = message;
   pdfTranslateDialogStatus.classList.toggle("error", error);
+}
+
+function estimateTranslationSeconds(bytes) {
+  const megabytes = Math.max(0.1, bytes / (1024 * 1024));
+  return Math.round(Math.min(12 * 60, Math.max(25, 25 + megabytes * 9)));
+}
+
+function formatDuration(seconds) {
+  const rounded = Math.max(0, Math.round(seconds));
+  if (rounded < 60) return `${rounded}s`;
+  const minutes = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  return remainder ? `${minutes}min ${remainder}s` : `${minutes}min`;
+}
+
+function startTranslationProgress(kind, estimateSeconds) {
+  const progress = translationProgress[kind];
+  if (!progress?.wrap) return;
+  clearInterval(state.translationTimers[kind]);
+  const startedAt = Date.now();
+  progress.wrap.hidden = false;
+  progress.bar.style.width = "2%";
+  progress.bar.parentElement.setAttribute("aria-valuenow", "2");
+  progress.text.textContent = "Extraindo o texto do PDF…";
+  progress.eta.textContent = `estimativa: ~${formatDuration(estimateSeconds)}`;
+
+  const update = () => {
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const ratio = Math.min(0.92, elapsed / Math.max(estimateSeconds * 1.15, 1));
+    const percent = Math.max(2, Math.round(ratio * 100));
+    progress.bar.style.width = `${percent}%`;
+    progress.bar.parentElement.setAttribute("aria-valuenow", String(percent));
+    progress.text.textContent = percent < 15
+      ? "Extraindo o texto do PDF…"
+      : percent < 82 ? "Traduzindo os blocos de texto…" : "Reconstruindo as páginas…";
+    const remaining = estimateSeconds - elapsed;
+    progress.eta.textContent = remaining > 0
+      ? `restante: ~${formatDuration(remaining)}`
+      : "mais alguns instantes…";
+  };
+  update();
+  state.translationTimers[kind] = setInterval(update, 500);
+}
+
+function finishTranslationProgress(kind, success) {
+  const progress = translationProgress[kind];
+  clearInterval(state.translationTimers[kind]);
+  state.translationTimers[kind] = null;
+  if (!progress?.wrap) return;
+  if (success) {
+    progress.bar.style.width = "100%";
+    progress.bar.parentElement.setAttribute("aria-valuenow", "100");
+    progress.text.textContent = "Tradução concluída.";
+    progress.eta.textContent = "finalizado";
+    setTimeout(() => { progress.wrap.hidden = true; }, 1400);
+  } else {
+    progress.wrap.hidden = true;
+  }
 }
 
 function slugifyFilename(value) {
@@ -499,6 +576,16 @@ function renderResult(item) {
   card.querySelector(".language").textContent = item.languageLabel || "Idioma não informado";
   card.querySelector(".title").textContent = item.title;
   card.querySelector(".authors").textContent = [item.authors?.join(", "), item.year].filter(Boolean).join(" · ") || "Autoria não informada";
+  const metaParts = [
+    item.publisher ? `Editora: ${item.publisher}` : "",
+    item.pageCount ? `${item.pageCount} páginas` : "",
+    item.isbn ? `ISBN: ${item.isbn}` : ""
+  ].filter(Boolean);
+  const metaNode = card.querySelector(".book-meta");
+  if (metaParts.length) {
+    metaNode.hidden = false;
+    metaNode.textContent = metaParts.join(" · ");
+  }
   card.querySelector(".summary-copy").textContent = item.description || "Acesse a fonte para conferir sinopse, edição e licença.";
   card.querySelector(".review-copy").textContent = item.rights || "Confira as condições de uso na fonte original.";
 
@@ -541,6 +628,10 @@ function renderResult(item) {
   }
   setLink(card, ".epub-link", item.epubUrl, "Baixar ePub");
   setLink(card, ".reader-link", item.textUrl, "Ler e salvar como PDF");
+  const torrentLabel = item.torrentSourceSite && item.torrentSourceSite !== item.site
+    ? `Torrent em ${item.torrentSourceSite}`
+    : "Baixar via torrent";
+  setLink(card, ".torrent-link", item.torrentUrl, torrentLabel);
 
   const favBtn = card.querySelector(".favorite-btn");
   favBtn.classList.toggle("saved", isFavorited(item.id));
@@ -577,7 +668,9 @@ function linkIcon(selector) {
     ".epub-link":
       '<path d="M12 6.2c-1.8-1.5-4.1-2-6.4-2-.6 0-1.1 0-1.6.2v13.4c.5-.1 1.1-.2 1.6-.2 2.3 0 4.6.5 6.4 2 1.8-1.5 4.1-2 6.4-2 .5 0 1.1.1 1.6.2V4.4c-.5-.2-1.1-.2-1.6-.2-2.3 0-4.6.5-6.4 2Z"/><path d="M12 6.2v13.4"/>',
     ".reader-link":
-      '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>'
+      '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+    ".torrent-link":
+      '<circle cx="5" cy="5" r="2.2"/><circle cx="19" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><path d="M5 5v0"/><path d="M16.2 7 7.8 17"/><path d="M5 7.2v9.6"/><path d="M19 7.2v0"/><path d="M12 19l7-2v5l-7-2v-1Z"/><path d="M12 19 5 17v5l7 2v-1Z"/>'
   }[selector] || "";
   const span = document.createElement("span");
   span.className = "link-icon";
@@ -797,7 +890,8 @@ function toggleFavorite(item) {
     authors: item.authors || [],
     year: item.year,
     sourceUrl: item.sourceUrl,
-    pdfUrl: item.pdfUrl
+    pdfUrl: item.pdfUrl,
+    torrentUrl: item.torrentUrl
   });
   saveShelf(list);
   toast(`Guardado na estante: ${item.title}`);
@@ -851,6 +945,12 @@ function renderShelf() {
     pdf.rel = "noreferrer";
     pdf.textContent = "PDF";
     if (!item.pdfUrl) pdf.hidden = true;
+    const torrent = document.createElement("a");
+    torrent.href = item.torrentUrl;
+    torrent.target = "_blank";
+    torrent.rel = "noreferrer";
+    torrent.textContent = "Torrent";
+    if (!item.torrentUrl) torrent.hidden = true;
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "Remover";
@@ -861,7 +961,7 @@ function renderShelf() {
       refreshFavoriteButtons();
       toast("Removido da estante");
     });
-    actions.append(open, pdf, remove);
+    actions.append(open, pdf, torrent, remove);
 
     row.append(info, actions);
     shelfList.append(row);
@@ -934,12 +1034,15 @@ async function copyText(text) {
 exportBtn.addEventListener("click", () => {
   const items = state.filtered;
   if (!items.length) { toast("Nada para exportar"); return; }
-  const rows = [["titulo", "autores", "ano", "fonte", "categoria", "disponibilidade", "idiomas", "formatos", "link", "pdf"]];
+  const rows = [["titulo", "autores", "ano", "editora", "paginas", "isbn", "fonte", "categoria", "disponibilidade", "idiomas", "formatos", "link", "pdf"]];
   for (const item of items) {
     rows.push([
       csvCell(item.title),
       csvCell((item.authors || []).join("; ")),
       item.year || "",
+      csvCell(item.publisher || ""),
+      item.pageCount || "",
+      item.isbn || "",
       item.site || "",
       item.category || "",
       csvCell(item.availability || ""),
