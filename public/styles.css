@@ -127,7 +127,7 @@ h2,
     linear-gradient(90deg, rgba(10, 14, 11, 0.92) 0%, rgba(10, 14, 11, 0.72) 38%, rgba(10, 14, 11, 0.08) 74%),
     linear-gradient(180deg, rgba(8, 12, 10, 0.25) 0%, rgba(8, 12, 10, 0.05) 58%, rgba(8, 12, 10, 0.85) 100%),
     url("/assets/biblioteca-arcana-coruja.png");
-  background-position: center center;
+  background-position: center 20%;
   background-size: cover;
   box-shadow: inset 0 -20px 45px rgba(0, 0, 0, 0.25);
 }
