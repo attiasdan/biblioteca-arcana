@@ -19,9 +19,10 @@ const HTML_SEARCH_TIMEOUT_MS = 1500;
 const HTML_DETAIL_TIMEOUT_MS = 2200;
 const PDF_DISCOVERY_TIMEOUT_MS = 2400;
 const HTML_CONCURRENCY = 6;
-const PDF_TRANSLATION_MAX_BYTES = Number(process.env.PDF_TRANSLATION_MAX_BYTES || 200 * 1024 * 1024);
+const PDF_TRANSLATION_MAX_BYTES = Number(process.env.PDF_TRANSLATION_MAX_BYTES || 100 * 1024 * 1024);
+// MyMemory permanece como fallback para instalações sem Workers AI ou backend local.
 const PDF_TRANSLATION_API_URL =
-  process.env.TRANSLATION_API_URL || "http://127.0.0.1:5000/translate";
+  process.env.TRANSLATION_API_URL || "https://api.mymemory.translated.net/get";
 const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEARCH_CACHE_MAX_ENTRIES = 50;
 const MAX_RESULTS = 36;
@@ -600,7 +601,7 @@ const SOURCE_PAYLOAD = {
   )
 };
 
-async function handleRequest(requestUrl, response, request = null) {
+async function handleRequest(requestUrl, response, request = null, runtime = {}) {
   try {
     if (requestUrl.pathname === "/api/search") {
       await handleSearch(requestUrl, response);
@@ -608,12 +609,12 @@ async function handleRequest(requestUrl, response, request = null) {
     }
 
     if (requestUrl.pathname === "/api/translate-pdf") {
-      await handlePdfTranslation(requestUrl, response, request);
+      await handlePdfTranslation(requestUrl, response, request, runtime);
       return;
     }
 
     if (requestUrl.pathname === "/api/translate-pdf-url") {
-      await handlePdfUrlTranslation(requestUrl, response, request);
+      await handlePdfUrlTranslation(requestUrl, response, request, runtime);
       return;
     }
 
@@ -646,7 +647,7 @@ if (require.main === module && isNodeRuntime) {
   });
 }
 
-async function handlePdfTranslation(requestUrl, response, request) {
+async function handlePdfTranslation(requestUrl, response, request, runtime) {
   const source = normalizeTranslationLanguage(requestUrl.searchParams.get("source"), true);
   const target = normalizeTranslationLanguage(requestUrl.searchParams.get("target"), false);
 
@@ -660,8 +661,8 @@ async function handlePdfTranslation(requestUrl, response, request) {
   }
 
   try {
-    const pdf = await readPdfRequestBody(request);
-    const translated = await translatePdfBuffer(pdf, source, target);
+    const pdf = await readPdfRequestBody(request, runtime);
+    const translated = await translatePdfBuffer(pdf, source, target, runtime);
     sendTranslatedPdf(response, translated, source, target);
   } catch (error) {
     const status = Number(error.statusCode || 502);
@@ -669,7 +670,7 @@ async function handlePdfTranslation(requestUrl, response, request) {
   }
 }
 
-async function handlePdfUrlTranslation(requestUrl, response, request) {
+async function handlePdfUrlTranslation(requestUrl, response, request, runtime) {
   const source = normalizeTranslationLanguage(requestUrl.searchParams.get("source"), true);
   const target = normalizeTranslationLanguage(requestUrl.searchParams.get("target"), false);
 
@@ -686,8 +687,8 @@ async function handlePdfUrlTranslation(requestUrl, response, request) {
       error.statusCode = 400;
       throw error;
     }
-    const pdf = await fetchRemotePdf(pdfUrl);
-    const translated = await translatePdfBuffer(pdf, source, target);
+    const pdf = await fetchRemotePdf(pdfUrl, runtime);
+    const translated = await translatePdfBuffer(pdf, source, target, runtime);
     sendTranslatedPdf(response, translated, source, target);
   } catch (error) {
     const status = Number(error.statusCode || 502);
@@ -713,7 +714,15 @@ function normalizeTranslationLanguage(value, allowAuto) {
   return /^[a-z]{2,3}$/.test(language) ? language : "";
 }
 
-async function readPdfRequestBody(request) {
+function translationMaxBytes(runtime = {}) {
+  const runtimeValue = runtime && runtime.env ? runtime.env.PDF_TRANSLATION_MAX_BYTES : "";
+  const nodeValue = typeof process !== "undefined" && process.env ? process.env.PDF_TRANSLATION_MAX_BYTES : "";
+  const value = Number(runtimeValue || nodeValue || PDF_TRANSLATION_MAX_BYTES);
+  return Number.isFinite(value) && value > 0 ? value : PDF_TRANSLATION_MAX_BYTES;
+}
+
+async function readPdfRequestBody(request, runtime = {}) {
+  const maxBytes = translationMaxBytes(runtime);
   if (!request) {
     const error = new Error("Envie o arquivo PDF no corpo da requisição.");
     error.statusCode = 400;
@@ -730,16 +739,16 @@ async function readPdfRequestBody(request) {
   let buffer;
   if (typeof request.arrayBuffer === "function") {
     const contentLength = Number(request.headers?.get?.("content-length") || 0);
-    if (contentLength > PDF_TRANSLATION_MAX_BYTES) {
-      const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+    if (contentLength > maxBytes) {
+      const error = new Error(`O PDF excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
       error.statusCode = 413;
       throw error;
     }
     buffer = Buffer.from(await request.arrayBuffer());
   } else {
     const contentLength = Number(request.headers?.["content-length"] || 0);
-    if (contentLength > PDF_TRANSLATION_MAX_BYTES) {
-      const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+    if (contentLength > maxBytes) {
+      const error = new Error(`O PDF excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
       error.statusCode = 413;
       throw error;
     }
@@ -747,14 +756,20 @@ async function readPdfRequestBody(request) {
     let received = 0;
     for await (const chunk of request) {
       received += chunk.length;
-      if (received > PDF_TRANSLATION_MAX_BYTES) {
-        const error = new Error(`O PDF excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+      if (received > maxBytes) {
+        const error = new Error(`O PDF excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
         error.statusCode = 413;
         throw error;
       }
       chunks.push(chunk);
     }
     buffer = Buffer.concat(chunks);
+  }
+
+  if (buffer.length > maxBytes) {
+    const error = new Error(`O PDF excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
+    error.statusCode = 413;
+    throw error;
   }
 
   if (!buffer.length || buffer.subarray(0, 5).toString() !== "%PDF-") {
@@ -774,7 +789,13 @@ async function readJsonRequestBody(request) {
 
   let raw;
   if (typeof request.json === "function") {
-    return request.json();
+    try {
+      return await request.json();
+    } catch {
+      const error = new Error("Os dados da tradução não são JSON válidos.");
+      error.statusCode = 400;
+      throw error;
+    }
   }
 
   const chunks = [];
@@ -813,7 +834,8 @@ function isAllowedRemotePdfUrl(value) {
   }
 }
 
-async function fetchRemotePdf(pdfUrl) {
+async function fetchRemotePdf(pdfUrl, runtime = {}) {
+  const maxBytes = translationMaxBytes(runtime);
   const response = await fetchWithTimeout(pdfUrl, Math.max(PROVIDER_TIMEOUT_MS, 15000), {
     headers: {
       Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.5",
@@ -827,14 +849,14 @@ async function fetchRemotePdf(pdfUrl) {
     throw error;
   }
   const declaredLength = Number(response.headers.get("content-length") || 0);
-  if (declaredLength > PDF_TRANSLATION_MAX_BYTES) {
-    const error = new Error(`O PDF remoto excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+  if (declaredLength > maxBytes) {
+    const error = new Error(`O PDF remoto excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
     error.statusCode = 413;
     throw error;
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length > PDF_TRANSLATION_MAX_BYTES) {
-    const error = new Error(`O PDF remoto excede o limite de ${Math.round(PDF_TRANSLATION_MAX_BYTES / 1024 / 1024)} MB.`);
+  if (buffer.length > maxBytes) {
+    const error = new Error(`O PDF remoto excede o limite de ${Math.round(maxBytes / 1024 / 1024)} MB.`);
     error.statusCode = 413;
     throw error;
   }
@@ -846,82 +868,48 @@ async function fetchRemotePdf(pdfUrl) {
   return buffer;
 }
 
-async function translatePdfBuffer(pdfBuffer, source, target) {
-  if (!isNodeRuntime) {
-    const error = new Error("A tradução de PDFs precisa ser executada no servidor local com Python e pdfplumber instalados.");
-    error.statusCode = 501;
-    throw error;
-  }
+async function translatePdfBuffer(pdfBuffer, source, target, runtime = {}) {
+  const { translatePdf, FONT_FILES } = require("./translate_pdf.js");
+  const runtimeEnv = runtime && runtime.env ? runtime.env : {};
+  const nodeEnv = typeof process !== "undefined" && process.env ? process.env : {};
+  const configuredApiUrl = runtimeEnv.TRANSLATION_API_URL || nodeEnv.TRANSLATION_API_URL || "";
+  const apiUrl = configuredApiUrl || PDF_TRANSLATION_API_URL;
+  const apiKey = runtimeEnv.TRANSLATION_API_KEY || nodeEnv.TRANSLATION_API_KEY || "";
+  const email = runtimeEnv.TRANSLATION_API_EMAIL || nodeEnv.TRANSLATION_API_EMAIL || "";
+  const chunkChars = Number(runtimeEnv.TRANSLATION_CHUNK_CHARS || nodeEnv.TRANSLATION_CHUNK_CHARS || 1800);
+  const concurrency = Number(runtimeEnv.TRANSLATION_CONCURRENCY || nodeEnv.TRANSLATION_CONCURRENCY || 8);
+  const maxPages = Number(runtimeEnv.PDF_TRANSLATION_MAX_PAGES || nodeEnv.PDF_TRANSLATION_MAX_PAGES || 0);
+  const maxChars = Number(runtimeEnv.PDF_TRANSLATION_MAX_CHARS || nodeEnv.PDF_TRANSLATION_MAX_CHARS || 0);
 
-  const fileSystem = await getFileSystem();
-  const crypto = require("crypto");
-  const { spawn } = require("child_process");
-  const baseDir = path.join(__dirname, "tmp", "pdfs");
-  await fileSystem.mkdir(baseDir, { recursive: true });
-  const token = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
-  const inputPath = path.join(baseDir, `source-${token}.pdf`);
-  const outputPath = path.join(baseDir, `translated-${token}.pdf`);
-  const scriptPath = path.join(__dirname, "translate_pdf.py");
-  const python = process.env.PDF_PYTHON || (process.platform === "win32" ? "python" : "python3");
+  async function loadFont(fontName) {
+    const fileName = FONT_FILES[fontName];
+    if (!fileName) throw new Error("Fonte de tradução desconhecida.");
 
-  try {
-    await fileSystem.writeFile(inputPath, pdfBuffer);
-    const args = [
-      scriptPath,
-      inputPath,
-      outputPath,
-      "--source",
-      source,
-      "--target",
-      target,
-      "--api-url",
-      PDF_TRANSLATION_API_URL,
-      "--api-key",
-      process.env.TRANSLATION_API_KEY || ""
-    ];
-    const result = await new Promise((resolve, reject) => {
-      const child = spawn(python, args, { windowsHide: true });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-      child.on("error", (error) => reject(error));
-      child.on("close", (code) => {
-        if (code !== 0) {
-          const detail = (stderr || stdout || `Tradutor terminou com código ${code}`).trim();
-          let message = detail;
-          try {
-            const parsed = JSON.parse(detail.split(/\r?\n/).pop() || "{}");
-            message = parsed.error || message;
-          } catch {
-            // Mantém a mensagem original do processo Python.
-          }
-          const error = new Error(message);
-          error.statusCode = code === 2 ? 422 : 502;
-          reject(error);
-          return;
-        }
-        try {
-          resolve(JSON.parse(stdout.trim().split(/\r?\n/).pop() || "{}"));
-        } catch {
-          reject(new Error("O tradutor não retornou um resumo válido."));
-        }
-      });
-    });
-    const buffer = await fileSystem.readFile(outputPath);
-    return { buffer, pages: result.pages || 0, characters: result.characters || 0 };
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      error.message = "Python não foi encontrado. Configure PDF_PYTHON com o caminho do interpretador.";
-      error.statusCode = 503;
+    if (runtimeEnv.ASSETS && typeof runtimeEnv.ASSETS.fetch === "function") {
+      const assetUrl = new URL(`/fonts/${fileName}`, "https://assets.local");
+      const fontResponse = await runtimeEnv.ASSETS.fetch(assetUrl);
+      if (!fontResponse.ok) throw new Error(`Fonte de tradução indisponível (${fontResponse.status}).`);
+      return new Uint8Array(await fontResponse.arrayBuffer());
     }
-    throw error;
-  } finally {
-    await Promise.all([
-      fileSystem.unlink(inputPath).catch(() => {}),
-      fileSystem.unlink(outputPath).catch(() => {})
-    ]);
+
+    if (!isNodeRuntime) {
+      throw new Error("As fontes de tradução não estão configuradas no ambiente web.");
+    }
+    const fileSystem = await getFileSystem();
+    return fileSystem.readFile(path.join(__dirname, "public", "fonts", fileName));
   }
+
+  return translatePdf(pdfBuffer, source, target, {
+    apiUrl,
+    apiKey,
+    email,
+    ai: configuredApiUrl ? null : runtimeEnv.AI,
+    chunkChars,
+    concurrency,
+    maxPages,
+    maxChars,
+    loadFont
+  });
 }
 
 async function handleSearch(requestUrl, response) {

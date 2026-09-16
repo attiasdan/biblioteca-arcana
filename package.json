@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/app.js",
+    "check": "node --check server.js && node --check worker.js && node --check translate_pdf.js && node --check public/app.js",
+    "test": "node --test test/translation.test.js test/server.test.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
@@ -13,7 +14,12 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.132.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "4.8.69"
+  }
 }

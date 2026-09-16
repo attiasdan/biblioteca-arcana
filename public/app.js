@@ -189,8 +189,8 @@ translateForm.addEventListener("submit", async (event) => {
     setTranslateStatus("O arquivo precisa estar no formato PDF.", true);
     return;
   }
-  if (file.size > 200 * 1024 * 1024) {
-    setTranslateStatus("O PDF excede o limite de 200 MB.", true);
+  if (file.size > 100 * 1024 * 1024) {
+    setTranslateStatus("O PDF excede o limite de 100 MB.", true);
     return;
   }
   if (source !== "auto" && source === target) {

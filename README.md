@@ -15,7 +15,7 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 - **Metadados enriquecidos**: autores completos, editora, número de páginas e ISBN (com preferência por ISBN-13) são exibidos no cartão quando a fonte os fornece (Open Library, Google Books, Internet Archive, Faded Page, DOAB/OAPEN, Crossref e DOAJ).
 - **Ranqueamento inteligente** que combina PDF direto, texto completo (TXT/ePub), quantidade de formatos, confiança da fonte, hospedeiro confiável do PDF, correspondência de título e número de fontes consolidadas.
 - **Anexo de PDFs complementares** a resultados sem PDF na fonte original, com verificação de segurança e correspondência de título.
-- **Conversor de PDF local**: traduz a camada de texto com LibreTranslate/Argos Translate sem chave de API, com tradução concorrente em blocos (mantendo páginas, imagens e geometria sempre que possível).
+- **Conversor de PDF serverless**: traduz a camada de texto em JavaScript com `pdfjs-dist` e `pdf-lib`, usando blocos concorrentes e mantendo páginas, imagens e geometria sempre que possível. No Worker, usa Workers AI; localmente, pode usar LibreTranslate/Argos offline, com MyMemory apenas como fallback.
 - **Filtro por idioma** (português, inglês, espanhol, francês, alemão, italiano) com detecção de títulos em português.
 - **Opção de exibir somente resultados com PDF disponível**.
 - **Filtros avançados**: ordenação (relevância, ano, fonte, título), faixa de ano (mín./máx.), formato (PDF, ePub, áudio, texto) e coleção (livro, artigo, audiolivro, texto).
@@ -50,12 +50,12 @@ A aplicação tem uma interface com tema de biblioteca arcana ("Biblioteca Arcan
 ## Requisitos
 
 - Node.js 18 ou superior.
-- Python 3.10 ou superior para o conversor de PDF.
+- Não é necessário Python: o conversor roda no mesmo runtime Node.js/Worker da aplicação.
 
 ## Executando
 
 ```bash
-./setup-translation.ps1  # primeira vez: instala LibreTranslate e os modelos locais
+npm ci                  # instala as dependências do projeto
 npm start
 # ou
 node server.js
@@ -71,12 +71,12 @@ O servidor sobe em `http://127.0.0.1:4173` (defina `PORT` na variável de ambien
 | --- | --- | --- |
 | `PORT` | `4173` | Porta HTTP do servidor |
 | `HTML_SOURCES` | todos | IDs de catálogos HTML a consultar, separados por vírgula (ex.: `planet-ebook,pdfbooksworld`) |
-| `PDF_PYTHON` | `python`/`python3` | Caminho do interpretador Python usado para extrair e reconstruir PDFs |
-| `TRANSLATION_API_URL` | `http://127.0.0.1:5000/translate` | Endpoint local do LibreTranslate; altere somente para usar outro provedor |
+| `TRANSLATION_API_URL` | vazio | Endpoint LibreTranslate/MyMemory ou de outro provedor compatível; se vazio no Worker, usa Workers AI |
 | `TRANSLATION_API_KEY` | vazio | Chave opcional/necessária conforme o provedor de tradução |
+| `TRANSLATION_API_EMAIL` | vazio | E-mail opcional para ampliar a cota do MyMemory |
 | `TRANSLATION_CONCURRENCY` | `8` | Requisições simultâneas ao serviço de tradução (reduzido automaticamente para MyMemory) |
 | `TRANSLATION_CHUNK_CHARS` | `1800` | Tamanho máximo de caracteres por bloco enviado ao tradutor |
-| `PDF_TRANSLATION_MAX_BYTES` | `209715200` | Tamanho máximo do PDF enviado (200 MB) |
+| `PDF_TRANSLATION_MAX_BYTES` | `104857600` | Tamanho máximo do PDF enviado (100 MB; ajuste conforme o limite da hospedagem) |
 
 ## Verificação
 
@@ -86,11 +86,13 @@ npm run check
 ./check.ps1
 ```
 
-Executa a checagem de sintaxe (`node --check`) em `server.js` e `public/app.js`.
+Executa a checagem de sintaxe em `server.js`, `worker.js`, `translate_pdf.js` e `public/app.js`.
+
+Os testes automatizados cobrem detecção de idioma, tradução de PDF, limites de entrada, endpoint HTTP e carregamento das fontes pelo binding de assets.
 
 ## Deploy (GitHub Actions + Cloudflare Workers)
 
-O projeto roda como um **Cloudflare Worker** servindo `public/` como assets estáticos. Um **GitHub Actions** publica automaticamente a cada push — não é preciso ligar nada manualmente.
+O projeto roda como um **Cloudflare Worker** servindo `public/` como assets estáticos. O workflow instala as dependências, executa as verificações e publica automaticamente a cada push — não é preciso instalar nada na hospedagem nem ligar nada manualmente.
 
 ### 1. Criar o repositório no GitHub
 
@@ -123,10 +125,12 @@ No repositório → **Settings → Secrets and variables → Actions → New rep
 
 O deploy acontece automaticamente em todo `git push` na `main`. O site fica em `https://biblioteca-arcana.<seu-subdominio>.workers.dev`.
 
+O `wrangler.toml` cria o binding `AI` para o modelo de tradução da Cloudflare. Ele precisa estar habilitado na conta; o uso é cobrado por tokens conforme o modelo. Se o binding não estiver disponível, o Worker usa `TRANSLATION_API_URL` ou o fallback MyMemory.
+
 Também é possível publicar localmente:
 
 ```bash
-npm install
+npm ci
 npm run dev      # teste local (assets + worker) em http://localhost:8787
 npx wrangler login
 npm run deploy   # publica direto
@@ -135,7 +139,8 @@ npm run deploy   # publica direto
 ### Limites do plano gratuito da Cloudflare
 
 - 100.000 requisições/dia e 50 sub-requests por requisição (a busca faz ~42-48, dentro do limite).
-- 10 ms de CPU por requisição; se a busca mais pesada estourar, o plano pago (US$ 5/mês) eleva para 30 s.
+- A busca e os assets funcionam no plano gratuito dentro dos limites da Cloudflare.
+- A tradução de PDF faz parsing e reconstrução no Worker; para conversões, use um plano com limite de CPU ampliado. No plano gratuito, o limite é 10 ms de CPU por requisição e o corpo pode ser limitado a 100 MB, o que pode interromper conversões maiores.
 
 ## Estrutura
 
@@ -144,6 +149,8 @@ npm run deploy   # publica direto
 ├── server.js          # Lógica central: agregação de fontes, deduplicação e ranqueamento
 ├── worker.js          # Entrypoint do Cloudflare Workers (adapta server.js para a Fetch API)
 ├── wrangler.toml      # Configuração do Workers (assets + nodejs_compat)
+├── translate_pdf.js   # Extração, tradução concorrente e reconstrução de PDFs
+├── test/              # Testes automatizados do conversor e dos endpoints
 ├── public/
 │   ├── index.html     # Interface (Biblioteca Arcana)
 │   ├── styles.css     # Estilos
@@ -204,15 +211,9 @@ Lista as fontes disponíveis (nome, tipo de acesso) e os idiomas suportados.
 
 ### `POST /api/translate-pdf?source=pt&target=en`
 
-Recebe o PDF bruto no corpo da requisição com `Content-Type: application/pdf` e devolve outro PDF como download. O processo usa `pdfminer` (motor do pdfplumber), `pypdf` e `reportlab`: extrai as linhas da camada de texto por caracteres, traduz em blocos com requisições **concorrentes** (padrão `TRANSLATION_CONCURRENCY=8`), cobre o texto original e pinta a tradução dentro das caixas originais, mantendo tamanho, imagens e número de páginas quando possível. Não existe limite artificial de páginas; o limite padrão é de 200 MB por arquivo e pode ser alterado por `PDF_TRANSLATION_MAX_BYTES`.
+Recebe o PDF bruto no corpo da requisição com `Content-Type: application/pdf` e devolve outro PDF como download. O processo usa `pdfjs-dist`, `pdf-lib` e fontes distribuídas em `public/fonts`: extrai as linhas da camada de texto, traduz blocos com requisições **concorrentes** (padrão `TRANSLATION_CONCURRENCY=8`), cobre o texto original e pinta a tradução dentro das caixas originais, mantendo tamanho, imagens e número de páginas quando possível. Não existe limite artificial de páginas; o limite padrão é de 100 MB por arquivo e pode ser alterado por `PDF_TRANSLATION_MAX_BYTES` quando a hospedagem aceitar arquivos maiores.
 
-Para habilitar a função localmente, instale as dependências Python:
-
-```bash
-python -m pip install pdfplumber pypdf reportlab
-```
-
-O endpoint usa por padrão um LibreTranslate local, sem chave de API. Execute `setup-translation.ps1` uma vez para instalar os modelos e depois `start.ps1`, que inicializa o serviço local automaticamente. Para usar outro provedor compatível, configure `TRANSLATION_API_URL` e, quando exigido, `TRANSLATION_API_KEY`. PDFs escaneados sem camada de texto são recusados; aplique OCR antes de enviá-los. A preservação visual é mais fiel em PDFs com fundo branco e texto selecionável, pois traduções podem ser maiores que o original e exigir redução horizontal dentro da mesma linha.
+No Worker, o endpoint usa o modelo de tradução Workers AI `@cf/meta/m2m100-1.2b` quando o binding `AI` está disponível; o MyMemory fica como fallback. Localmente, `start.ps1` inicia o LibreTranslate/Argos se ele tiver sido preparado por `setup-translation.ps1`, evitando serviço remoto e cota diária. Para usar outro provedor compatível, configure `TRANSLATION_API_URL` e, quando exigido, `TRANSLATION_API_KEY`. PDFs escaneados sem camada de texto são recusados — este conversor não faz OCR remoto —; aplique OCR local antes de enviá-los. A preservação visual é mais fiel em PDFs com fundo branco e texto selecionável, pois traduções podem ser maiores que o original e exigir redução horizontal dentro da mesma linha.
 
 ### `POST /api/translate-pdf-url?source=pt&target=en`
 

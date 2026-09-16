@@ -2,7 +2,7 @@ import server from "./server.js";
 
 const API_PATHS = new Set(["/api/search", "/api/sources", "/api/stats", "/api/translate-pdf", "/api/translate-pdf-url"]);
 
-function callHandler(requestUrl, request) {
+function callHandler(requestUrl, request, env) {
   return new Promise((resolve) => {
     const adapter = {
       status: 200,
@@ -15,7 +15,7 @@ function callHandler(requestUrl, request) {
         resolve(new Response(body, { status: this.status, headers: this.headers }));
       }
     };
-    server.handleRequest(requestUrl, adapter, request).catch(() => {
+    server.handleRequest(requestUrl, adapter, request, { env }).catch(() => {
       resolve(
         new Response(JSON.stringify({ error: "Erro interno no buscador." }), {
           status: 500,
@@ -27,11 +27,14 @@ function callHandler(requestUrl, request) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const requestUrl = new URL(request.url);
     if (API_PATHS.has(requestUrl.pathname)) {
-      return callHandler(requestUrl, request);
+      return callHandler(requestUrl, request, env);
     }
-    return new Response("Não encontrado.", { status: 404 });
+    if (env && env.ASSETS && typeof env.ASSETS.fetch === "function") {
+      return env.ASSETS.fetch(request);
+    }
+    return new Response("Assets não configurados.", { status: 503 });
   }
 };
